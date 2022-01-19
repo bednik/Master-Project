@@ -16,4 +16,5 @@ hdr_file.write(str(img.header) + "\n" + "Shape: " + str(img.shape))
 hdr_file.close()
 
 arr = img.get_fdata()
-np.save(out_file, arr)
+save_arr = np.ascontiguousarray(arr)
+np.save(out_file, save_arr)
