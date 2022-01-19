@@ -38,7 +38,7 @@ public class CTTextureBuilder : EditorWindow
         int textureSize = width * height * depth;
 
         // From Anders Tasken's project
-        Texture3D texture = new Texture3D(width, height, depth, TextureFormat.ARGB32, false);
+        Texture3D texture = new Texture3D(width, height, depth, TextureFormat.RGBA32, false);
         // TODO: Confirm if these are good settings
         texture.wrapMode = TextureWrapMode.Clamp;
         texture.filterMode = FilterMode.Bilinear;
