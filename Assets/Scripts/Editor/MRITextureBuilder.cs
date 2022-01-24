@@ -40,8 +40,6 @@ public class MRITextureBuilder : EditorWindow
                 metadata.Add(items[0], System.Int32.Parse(items[2]));
             }
         }
-
-        Debug.Log(metadata);
         return metadata;
     }
 
@@ -81,16 +79,36 @@ public class MRITextureBuilder : EditorWindow
         metadata.TryGetValue("cal_max", out calmax);
         metadata.TryGetValue("cal_min", out calmin);
 
+        var max = np.amax(flatArray);
+        var divisor = Mathf.Ceil((float)(max.GetDouble(0)/255));
+
         // Since my data satisfies this, I'll keep it like this for now
         // In reality, values below calmin are black, those above calmax are white, and those between are something else
         // Sometimes a separate file will define colors for different tissue types in a color lookup table
         // Such a file can be parsed in a similar fashion to the metadata file
-        if (calmax == 0 && calmin == calmax)
+        if (calmax == 0 && calmin == calmax) // Undefined color mappings
         {
             for (int i = 0; i < textureSize; i++)
             {
-                byte b = flatArray[i];
-                colors[i] = new Color32(b, b, b, b);
+                double val = flatArray.GetDouble(i);
+                byte alpha = (byte)(val / divisor);
+
+                byte c;
+
+                if (alpha < 40)
+                {
+                    c = alpha;
+                }
+                else if (alpha > 200)
+                {
+                    c = 255;
+                }
+                else
+                {
+                    c = (byte) (1.2f * 200);
+                }
+
+                colors[i] = new Color32(c, c, c, alpha);
             }
         }
         else
