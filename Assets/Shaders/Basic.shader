@@ -4,15 +4,17 @@ Shader "VolumeRendering/Basic"
     {
         _Volume("Volume", 3D) = "" {}
         _Intensity("Intensity", Range(1.0, 5.0)) = 1.2
-        _ThresholdMax("ThresholdMax", Range(0.0, 1.0)) = 0.95
-        _ThresholdMin("ThresholdMin", Range(0.0, 1.0)) = 0.05
-		_SamplePoints("Amount of sample points", Range(1, 256))
-        //_SliceMin("Slice min", Vector) = (0.0, 0.0, 0.0, -1.0)
-        //_SliceMax("Slice max", Vector) = (1.0, 1.0, 1.0, -1.0)
+        _ThresholdMax("Max accepted texture value", Range(0.0, 1.0)) = 0.95
+        _ThresholdMin("Minumum accepted texture value", Range(0.0, 1.0)) = 0.05
+        _SliceMin("Slice min", Vector) = (-0.5, -0.5, -0.5, 1.0)
+        _SliceMax("Slice max", Vector) = (0.5, 0.5, 0.5, 1.0)
+		_bbMin("Volume's minimum coord of bounding box", Vector) = (-0.5, -0.5, -0.5, 1.0)
+		_bbMax("Volume's maximum coord of bounding box", Vector) = (0.5, 0.5, 0.5, 1.0)
     }
 
 	SubShader
 	{
+		// Looks weird in unity, but looks fine on HoloLens
 		Blend SrcAlpha OneMinusSrcAlpha
 
 		Pass
