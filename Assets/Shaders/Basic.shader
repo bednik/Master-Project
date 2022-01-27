@@ -14,7 +14,8 @@ Shader "VolumeRendering/Basic"
 
 	SubShader
 	{
-		// Looks weird in unity, but looks fine on HoloLens
+		// Setting the renderqueue to "Transparent" makes it prettier in the editor
+		//Tags { "Queue" = "Transparent" "DisableBatching" = "True"}
 		Blend SrcAlpha OneMinusSrcAlpha
 
 		Pass

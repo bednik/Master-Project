@@ -82,20 +82,21 @@ fixed4 frag(v2f i) : SV_Target
   float3 current_ray_pos = ray.origin;
 
   float prev_alpha = 0;
+  float oneMinusAlpha = 0;
 
   [unroll]
   for (int iter = 0; iter < SAMPLEPOINTS; iter++)
   {
 	// Sample the texture and set the value to 0 if it is outside the slice or not within the value thresholds
-	float textureVal = tex3Dlod(_Volume, float4(current_ray_pos + 0.5f, 0.f)).r * InsideSlice(current_ray_pos);
+	float textureVal = tex3D(_Volume, current_ray_pos + 0.5f).r * InsideSlice(current_ray_pos);
 	float src = textureVal * InsideThreshold(textureVal);
 
 	// Get the alpha directly from the texture, set the color by blending
+	oneMinusAlpha = 1 - prev_alpha;
 	dst.a += src;
-	dst.rgb = dst.rgb * (1 - prev_alpha) + src;
+	dst.rgb = mad(dst.rgb, oneMinusAlpha, src); // dst.rgb * (1 - prev_alpha) + src
 
 	prev_alpha = src;
-
 	current_ray_pos += ray_step;
   }
 
