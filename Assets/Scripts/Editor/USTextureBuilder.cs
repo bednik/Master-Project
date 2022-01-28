@@ -33,11 +33,11 @@ public class USTextureBuilder : EditorWindow
         int textureSize = width * height * depth;
 
         // From Anders Tasken's project
-        Texture3D texture = new Texture3D(width, height, depth, TextureFormat.RGBA32, false);
+        Texture3D density = new Texture3D(width, height, depth, TextureFormat.R8, false);
         // TODO: Confirm if these are good settings
-        texture.wrapMode = TextureWrapMode.Clamp;
-        texture.filterMode = FilterMode.Bilinear;
-        texture.anisoLevel = 0;
+        density.wrapMode = TextureWrapMode.Clamp;
+        density.filterMode = FilterMode.Bilinear;
+        density.anisoLevel = 0;
         // Done
 
         // TODO: For larger textures, make a tiled version (i.e. take n rows at a time)
@@ -49,19 +49,18 @@ public class USTextureBuilder : EditorWindow
             Debug.LogError("Mismatch between desired texture resolution and input resolution!");
         }
 
-        Color32[] colors = new Color32[textureSize];
+        byte[] densityVals = new byte[textureSize];
         var flatArray = array.flat;
 
         for (int i = 0; i < textureSize ; i++)
         {
-            byte b = flatArray[i];
-            colors[i] = new Color32(b, b, b, b);
+            densityVals[i] = flatArray[i];
         }
 
-        texture.SetPixels32(colors);
-        texture.Apply();
+        density.SetPixelData(densityVals, 0);
+        density.Apply();
 
-        AssetDatabase.CreateAsset(texture, outputPath);
+        AssetDatabase.CreateAsset(density, outputPath);
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
     }

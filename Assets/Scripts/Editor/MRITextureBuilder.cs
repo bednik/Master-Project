@@ -10,7 +10,6 @@ public class MRITextureBuilder : EditorWindow
 {
     string inputPath, headerPath, outputPath;
     int width = 320, height = 300, depth = 54;
-    bool color = false;
 
     [MenuItem("Window/3D Texture Builders/Magnetic Resonance Texture Builder")]
     public static void ShowWindow()
@@ -56,7 +55,7 @@ public class MRITextureBuilder : EditorWindow
         int textureSize = width * height * depth;
 
         // From Anders Tasken's project
-        Texture3D texture = new Texture3D(width, height, depth, TextureFormat.RGBA32, false);
+        Texture3D texture = new Texture3D(width, height, depth, TextureFormat.R8, false);
         // TODO: Confirm if these are good settings
         texture.wrapMode = TextureWrapMode.Clamp;
         texture.filterMode = FilterMode.Bilinear;
@@ -72,7 +71,7 @@ public class MRITextureBuilder : EditorWindow
             Debug.LogError("Mismatch between desired texture resolution and input resolution!");
         }
 
-        Color32[] colors = new Color32[textureSize];
+        byte[] colors = new byte[textureSize];
         var flatArray = array.flat;
 
         int calmax = 0, calmin = 0;
@@ -91,48 +90,16 @@ public class MRITextureBuilder : EditorWindow
             for (int i = 0; i < textureSize; i++)
             {
                 double val = flatArray.GetDouble(i);
-                byte alpha = (byte)(val / divisor);
-
-                byte c;
-
-                if (alpha < 40)
-                {
-                    c = alpha;
-                }
-                else if (alpha > 200)
-                {
-                    c = 255;
-                }
-                else
-                {
-                    c = (byte) (1.2f * 200);
-                }
-
-                colors[i] = new Color32(c, c, c, alpha);
+                colors[i] = (byte)(val / divisor);
             }
         }
         else
         {
-            for (int i = 0; i < textureSize; i++)
-            {
-                byte val = flatArray[i];
-                if (val <= calmin)
-                {
-                    colors[i] = new Color32(0, 0, 0, val);
-                }
-                else if (val >= calmax)
-                {
-                    colors[i] = new Color32(255, 255, 255, val);
-                }
-                else
-                {
-                    colors[i] = new Color32(255, 0, 0, val);
-                }
-            }
-            
+            Debug.Log("I don't support explicit transfer functions specified by the metadata yet");
+            return;
         }
         
-        texture.SetPixels32(colors);
+        texture.SetPixelData(colors, 0);
         texture.Apply();
 
         AssetDatabase.CreateAsset(texture, outputPath);
@@ -148,7 +115,6 @@ public class MRITextureBuilder : EditorWindow
         width = EditorGUILayout.IntField("Width:", width);
         height = EditorGUILayout.IntField("Height:", height);
         depth = EditorGUILayout.IntField("Depth:", depth);
-        color = EditorGUILayout.Toggle("Generate colored volume", color);
 
         if (GUILayout.Button("Generate texture"))
         {
