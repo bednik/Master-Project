@@ -1,5 +1,5 @@
 // Shader made by Anders Tasken, Erlend Barstad, and Sondre Tagestad
-Shader "VolumeRendering/Anders"
+Shader "VolumeRendering/Basic/Anders"
 {
 	Properties
 	{

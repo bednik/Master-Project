@@ -1,11 +1,12 @@
-Shader "VolumeRendering/Basic8"
+Shader "VolumeRendering/Optimized/GrayERT"
 {
 	Properties
 	{
 		_Volume("Volume", 3D) = "" {}
+		_GrayTransfer("Grayscale transfer function", 2D) = "" {}
+		_AlphaTransfer("Alpha transfer function", 2D) = "" {}
 		_Intensity("Intensity", Range(1.0, 5.0)) = 1.2
-		_ThresholdMax("Max accepted texture value", Range(0.0, 1.0)) = 0.95
-		_ThresholdMin("Minumum accepted texture value", Range(0.0, 1.0)) = 0.05
+		_ERT("Stop the ray after this amount of time", Range(0.0, 1.0)) = 0.95
 		_SliceMin("Slice min", Vector) = (-0.5, -0.5, -0.5, 1.0)
 		_SliceMax("Slice max", Vector) = (0.5, 0.5, 0.5, 1.0)
 		_bbMin("Volume's minimum coord of bounding box", Vector) = (-0.5, -0.5, -0.5, 1.0)
@@ -25,7 +26,8 @@ Shader "VolumeRendering/Basic8"
 				#pragma fragment frag
 
 				sampler3D _Volume;
-				half _Intensity, _ThresholdMin, _ThresholdMax;
+				sampler2D _GrayTransfer, _AlphaTransfer;
+				half _Intensity, _ThresholdMin, _ThresholdMax, _ERT;
 				half3 _SliceMin, _SliceMax;
 				float3 _bbMin, _bbMax;
 				#define SAMPLEPOINTS 256
@@ -92,45 +94,54 @@ Shader "VolumeRendering/Basic8"
 					return o;
 				}
 
-				// Fragmen kernel //
+				// Fragment kernel //
 				fixed4 frag(v2f i) : SV_Target
 				{
-				  Ray ray;
-				  ray.origin = i.local;
+					Ray ray;
+					ray.origin = i.local;
 
-				  float3 dir = (i.world - _WorldSpaceCameraPos);
-				  ray.dir = normalize(mul(unity_WorldToObject, dir));
+					float3 dir = (i.world - _WorldSpaceCameraPos);
+					ray.dir = normalize(mul(unity_WorldToObject, dir));
 
-				  float2 boundingBoxIntersections = intersectAABB(ray.origin, ray.dir);
-				  float3 ray_step = calculateStep(boundingBoxIntersections, ray);
+					float2 boundingBoxIntersections = intersectAABB(ray.origin, ray.dir);
+					float3 ray_step = calculateStep(boundingBoxIntersections, ray);
 
-				  float4 dst = float4(0, 0, 0, 0);
-				  float3 current_ray_pos = ray.origin;
+					float4 dst = float4(0, 0, 0, 0);
+					float3 current_ray_pos = ray.origin;
 
-				  float prev_alpha = 0;
-				  float oneMinusAlpha = 0;
+					float oneMinusAlpha = 0;
 
-				  [unroll]
-				  for (int iter = 0; iter < SAMPLEPOINTS; iter++)
-				  {
-					  // Sample the texture and set the value to 0 if it is outside the slice or not within the value thresholds
-					  float textureVal = tex3D(_Volume, current_ray_pos + 0.5f) * InsideSlice(current_ray_pos);
-					  float src = textureVal * InsideThreshold(textureVal);
+					[loop]
+					for (int iter = 0; iter < SAMPLEPOINTS; iter++)
+					{
+						// Sample the texture and set the value to 0 if it is outside the slice or not within the value thresholds
+						float density = tex3D(_Volume, current_ray_pos + 0.5f) * InsideSlice(current_ray_pos);
 
-					  // Get the alpha directly from the texture, set the color by blending
-					  oneMinusAlpha = 1 - prev_alpha;
-					  dst.a += src;
-					  dst.rgb = mad(dst.rgb, oneMinusAlpha, src); // dst.rgb * (1 - prev_alpha) + src
+						// Two extra texture memory accesses. Can be merged by using a 16-bit 2-channel texture (or 32 bit for color)
+						float src = tex2D(_GrayTransfer, density);
+						float alpha = tex2D(_AlphaTransfer, density);
 
-					  prev_alpha = src;
-					  current_ray_pos += ray_step;
+						oneMinusAlpha = 1 - dst.a;
+						dst.a = mad(alpha, oneMinusAlpha, dst.a);
+						dst.rgb = mad(src*alpha, oneMinusAlpha, dst.rgb);
+
+						if (dst.a >= _ERT) {
+							dst.a = 1;
+							break;
+						}
+
+						current_ray_pos += ray_step;
+
+						if (InsideSlice(current_ray_pos) == 0) {
+							break;
+						}
 					}
 
 					dst = saturate(dst);
 
 					return dst;
-				  }
-				ENDCG
+				}
+			ENDCG
 			}
 		}
 }

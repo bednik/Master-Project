@@ -1,4 +1,4 @@
-Shader "VolumeRendering/Basic"
+Shader "VolumeRendering/Basic/Basic"
 {
     Properties
     {
