@@ -5,188 +5,7 @@ using MathNet.Numerics.Interpolation;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Diagnostics;
-
-[System.Serializable]
-class ColorTransferFunctionPoint
-{
-    public ColorTransferFunctionPoint(byte _r, byte _g, byte _b, byte _density)
-    {
-        r = _r;
-        g = _g;
-        b = _b;
-        density = _density;
-    }
-
-    [SerializeField]
-    public byte r, g, b, density;
-}
-
-[System.Serializable]
-class AlphaTransferFunctionPoint
-{
-    public AlphaTransferFunctionPoint(byte _a, byte _density)
-    {
-        a = _a;
-        density = _density;
-    }
-
-    [SerializeField]
-    public byte a, density;
-}
-
-class OctreeNode
-{
-    /// <summary>
-    /// Creates a node for an octree which represents a subvolume (Parallel-friendly)
-    /// </summary>
-    /// <param name="alphaTransferFunction">The alpha transfer function which will decide the opacity of the final volume</param>
-    /// <param name="colorTransferFunction">The color transfer function which will decide the color of the final volume</param>
-    /// <param name="vol">The full volume</param>
-    /// <param name="_min">The minimum index of the subvolume</param>
-    /// <param name="_max">The maximum index of the subvolume</param>
-    /// <param name="_level">How deep in the tree this node is</param>
-    public OctreeNode(CubicSpline alphaTransferFunction, CubicSpline[] colorTransferFunction, Unity.Collections.NativeArray<byte> vol_arr, Vector3 _min, Vector3 _max, byte _level, int[] dims)
-    {
-        min = _min;
-        max = _max;
-        level = _level;
-
-        // Iterate through desired subsampled volume
-        minVal = 255;
-        maxVal = 0;
-        empty = true;
-
-        for (int z = (int)min.z; z < (int)max.z; z++)
-        {
-            if (z >= dims[2]) break;
-
-            for (int y = (int)min.y; y < (int)max.y; y++)
-            {
-                if (y >= dims[1]) break;
-
-                for (int x = (int)min.x; x < (int)max.x; x++)
-                {
-                    if (x >= dims[0]) break;
-
-                    byte elem = vol_arr[x + y * dims[0] + z * dims[0] * dims[1]];
-
-                    minVal = (elem < minVal) ? elem : minVal;
-                    maxVal = (elem > maxVal) ? elem : maxVal;
-
-                    if (empty)
-                    {
-                        byte alpha = (byte)Mathf.Max(0, Mathf.Min((float)alphaTransferFunction.Interpolate(elem), 255));
-                        byte[] colors = new byte[colorTransferFunction.Length];
-                        for (int i = 0; i < colorTransferFunction.Length; i++)
-                        {
-                            colors[i] = (byte)Mathf.Max(0, Mathf.Min((float)colorTransferFunction[i].Interpolate(elem), 255));
-                        }
-                        // The subvolume is not empty if any of the color channels contain a non-zero value AND the alpha is not zero
-                        empty = colors.All(color => color == 0) || alpha == 0;
-                    }
-
-                    // Break out of the loop if we reach minimum minVal AND maximum maxVal
-                    if (minVal <= 0 && maxVal >= 255)
-                    {
-                        y = (int)max.y;
-                        z = (int)max.z;
-                        break;
-                    }
-                }
-            }
-        }
-    }
-
-    // Sequential version
-    public OctreeNode(CubicSpline alphaTransferFunction, CubicSpline[] colorTransferFunction, Texture3D vol, Vector3 _min, Vector3 _max, byte _level)
-    {
-        min = _min;
-        max = _max;
-        level = _level;
-
-        // Iterate through desired subsampled volume
-        var vol_arr = vol.GetPixelData<byte>(0);
-        minVal = 255;
-        maxVal = 0;
-        empty = true;
-
-        for (int z = (int)min.z; z < (int)max.z; z++)
-        {
-            if (z >= vol.depth) break;
-
-            for (int y = (int)min.y; y < (int)max.y; y++)
-            {
-                if (y >= vol.height) break;
-
-                for (int x = (int)min.x; x < (int)max.x; x++)
-                {
-                    if (x >= vol.width) break;
-
-                    byte elem = vol_arr[x + y * vol.width + z * vol.width * vol.height];
-
-                    minVal = (elem < minVal) ? elem : minVal;
-                    maxVal = (elem > maxVal) ? elem : maxVal;
-
-                    if (empty)
-                    {
-                        byte alpha = (byte)Mathf.Max(0, Mathf.Min((float)alphaTransferFunction.Interpolate(elem), 255));
-                        byte[] colors = new byte[colorTransferFunction.Length];
-                        for (int i = 0; i < colorTransferFunction.Length; i++)
-                        {
-                            colors[i] = (byte)Mathf.Max(0, Mathf.Min((float)colorTransferFunction[i].Interpolate(elem), 255));
-                        }
-                        // The subvolume is not empty if any of the color channels contain a non-zero value AND the alpha is not zero
-                        empty = colors.All(color => color == 0) || alpha == 0;
-                    }
-
-                    // Break out of the loop if we reach minimum minVal AND maximum maxVal
-                    if (minVal <= 0 && maxVal >= 255)
-                    {
-                        y = (int)max.y;
-                        z = (int)max.z;
-                        break;
-                    }
-                }
-            }
-        }
-    }
-
-    public Vector3 min, max;
-
-    // The min and max density values
-    public byte minVal, maxVal;
-    public bool empty;
-    public byte level;
-    List<OctreeNode> children { get; set; }
-    OctreeNode parent { get; set; }
-}
-
-/*class OccupancyNode : OctreeNode
-{
-    public OccupancyNode(CubicSpline transferFunction, Texture3D vol, Vector3 _min, Vector3 _max) : base(transferFunction, vol, _min, _max)
-    {
-
-    }
-
-    public int empty, nonEmpty, unknown;
-    Occupancy occupancyClass;
-    List<OccupancyNode> children { get; set; }
-}*/
-
-enum EmptySpaceSkipMethod
-{
-    UNIFORM,
-    OCTREE,
-    CHEBYSHEV,
-    SPARSELEAP
-}
-
-enum Occupancy
-{
-    EMPTY,
-    NONEMPTY,
-    UNKNOWN
-}
+using VolumeRendering;
 
 /// <summary>
 /// Attach to volume object to be able to manipulate in real-time
@@ -196,6 +15,9 @@ public class VolumeRenderController : MonoBehaviour
 {
     [SerializeField] private Shader m_shader;
     [SerializeField] private Texture3D m_volume;
+    private MeshRenderer m_renderer;
+
+    [SerializeField] AudioSource completeSound;
 
     [SerializeField] private bool color = false;
 
@@ -206,7 +28,7 @@ public class VolumeRenderController : MonoBehaviour
 
     // Empty-space skipping
     [SerializeField] private bool emptySpaceSkip = false;
-    [SerializeField] private EmptySpaceSkipMethod emptySpaceSkipMethod = EmptySpaceSkipMethod.OCTREE;
+    [SerializeField] private EmptySpaceSkipMethod emptySpaceSkipMethod = EmptySpaceSkipMethod.UNIFORM;
     [SerializeField] private int blockSize = 32;
     [SerializeField] private int octreeLevels = 2;
 
@@ -214,7 +36,6 @@ public class VolumeRenderController : MonoBehaviour
     [SerializeField] private float[] thresholds = new float[2]{0.05f, 0.95f};
     [SerializeField] private Vector4 sliceMin = new Vector4(-0.5f, -0.5f, -0.5f, 1f);
     [SerializeField] private Vector4 sliceMax = new Vector4(0.5f, 0.5f, 0.5f, 1f);
-    [SerializeField] private float intensity = 1f;
 
     /// Transfer function sample points
     [SerializeField]
@@ -382,29 +203,36 @@ public class VolumeRenderController : MonoBehaviour
         return colorTransfer;
     }
 
-    /// <summary>
-    /// Generate an octree structure representing sub-volumes and whether they will contribute to the final color
-    /// </summary>
-    /// <returns>An RGBA32 3D texture. R and G represent the min and max values of</returns>
-    private void generateOctree()
+    // Returns a completely red 3D texture
+    private Texture3D RedTex(int[] dims)
     {
-        // Simply assuming grayscale for now
-        int rootSize = Mathf.Max(m_volume.width, m_volume.height, m_volume.depth);
-        //OctreeNode root = new OctreeNode(alphaTransferFunction, new CubicSpline[]{ grayTransferFunction }, m_volume, new Vector3(0, 0, 0), new Vector3(rootSize, rootSize, rootSize), 0);
+        Texture3D redTex = new Texture3D(dims[0], dims[1], dims[2], TextureFormat.R8, false);
+        redTex.wrapMode = TextureWrapMode.Clamp;
+        redTex.filterMode = FilterMode.Bilinear;
+        redTex.anisoLevel = 0;
+        byte[] color = new byte[dims[0] * dims[1] * dims[2]];
 
-        int size = rootSize;
-        //OctreeNode currentNode = root;
-        
+        for (int i = 0; i < color.Length; i++)
+        {
+            color[i] = 255;
+        }
+
+        redTex.SetPixelData(color, 0);
+        redTex.Apply();
+        return redTex;
     }
 
     // Warning: Slow
     // Fix: Parallelism?
-    private Texture3D UniformSubdivision()
+        // Tried it, didn't work. I probably did it wrong, though...
+    private IEnumerator UniformSubdivision()
     {
+        UnityEngine.Debug.Log("STARTED COROUTINE!");
         int[] dims = new int[3] { Mathf.CeilToInt((float)m_volume.width / blockSize), Mathf.CeilToInt((float)m_volume.height / blockSize), Mathf.CeilToInt((float)m_volume.depth / blockSize) };
         byte[] textureData = new byte[dims[0] * dims[1] * dims[2]];
         int idx = 0;
-        
+
+        // Parallel
         /*int[] originalDims = new int[3] { m_volume.width, m_volume.height, m_volume.depth };
         var z_indices = new List<int>();
         for (int i = 0; i < originalDims[2]; i += blockSize)
@@ -415,16 +243,15 @@ public class VolumeRenderController : MonoBehaviour
 
         Parallel.ForEach(z_indices, z =>
         {
-            int index = z/8;
             for (int y = 0; y < originalDims[1]; y += blockSize)
             {
                 for (int x = 0; x < originalDims[0]; x += blockSize)
                 {
-                    textureData[index] = (new OctreeNode(alphaTransferFunction, new CubicSpline[] { grayTransferFunction }, vol_arr, new Vector3(x, y, z), new Vector3(x + blockSize, y + blockSize, z + blockSize), 0, originalDims)).empty ? (byte)0 : (byte)255;
-                    index++;
+                    textureData[x/blockSize + (y/blockSize)*dims[0] + (z/blockSize)*dims[0]*dims[1]] = (new OctreeNode(alphaTransferFunction, new CubicSpline[] { grayTransferFunction }, vol_arr, new Vector3(x, y, z), new Vector3(x + blockSize, y + blockSize, z + blockSize), 0, originalDims)).empty ? (byte)0 : (byte)255;
                 }
             }
         });*/
+        // Parallel end
         
         for (int z = 0; z < m_volume.depth; z += blockSize)
         {
@@ -434,8 +261,11 @@ public class VolumeRenderController : MonoBehaviour
                 {
                     textureData[idx] = (new OctreeNode(alphaTransferFunction, new CubicSpline[] { grayTransferFunction }, m_volume, new Vector3(x, y, z), new Vector3(x + blockSize, y + blockSize, z + blockSize), 0)).empty ? (byte)0 : (byte)255;
                     idx++;
+                    yield return new WaitForSecondsRealtime(0.001f);
                 }
+                
             }
+            UnityEngine.Debug.Log(string.Format("{0} out of {1} points done", idx, dims[0] * dims[1] * dims[2]));
         }
 
         Texture3D subdivision = new Texture3D(dims[0], dims[1], dims[2], TextureFormat.R8, false);
@@ -446,13 +276,37 @@ public class VolumeRenderController : MonoBehaviour
         subdivision.SetPixelData(textureData, 0);
         subdivision.Apply();
 
-        return subdivision;
+        m_renderer.sharedMaterial.SetTexture("_EmptySpaceSkipStructure", subdivision);
+        completeSound.Play(0);
+        yield return null;
+    }
+
+    // Occupancy histogram tree (SparseLeap)
+    private OccupancyNode GenerateOHT(bool delayed)
+    {
+        OccupancyNode root = new OccupancyNode(new Vector3(0, 0, 0), new Vector3(m_volume.width - 1, m_volume.height - 1, m_volume.depth - 1), null);
+        if (delayed) // Set all to "unknown"
+        {
+
+        } 
+        else
+        {
+
+        }
+
+        return root;
+    }
+
+    // Occupancy geometry generation (SparseLeap)
+    private void GenerateOccupancyGeometry()
+    {
+
     }
 
 
     private void Awake()
     {
-        MeshRenderer renderer = GetComponent<MeshRenderer>();
+        m_renderer = GetComponent<MeshRenderer>();
         Transform transform = GetComponent<Transform>();
         Bounds localAABB = GetComponent<MeshFilter>().sharedMesh.bounds;
         m_material = new Material(m_shader);
@@ -475,11 +329,9 @@ public class VolumeRenderController : MonoBehaviour
             switch (emptySpaceSkipMethod)
             {
                 case EmptySpaceSkipMethod.UNIFORM: // Very slow!
-                    m_material.SetTexture("_EmptySpaceSkipStructure", UniformSubdivision());
+                    int[] dims = new int[3] { Mathf.CeilToInt((float)m_volume.width / blockSize), Mathf.CeilToInt((float)m_volume.height / blockSize), Mathf.CeilToInt((float)m_volume.depth / blockSize) };
+                    m_material.SetTexture("_EmptySpaceSkipStructure", RedTex(dims));
                     m_material.SetInt("_BlockSize", blockSize);
-                    break;
-                case EmptySpaceSkipMethod.OCTREE:
-                    generateOctree();
                     break;
                 case EmptySpaceSkipMethod.CHEBYSHEV:
                     break;
@@ -494,22 +346,28 @@ public class VolumeRenderController : MonoBehaviour
         m_material.SetFloat("_ThresholdMax", thresholds[1]);
         m_material.SetVector("_SliceMin", sliceMin);
         m_material.SetVector("_SliceMax", sliceMax);
-        m_material.SetFloat("_Intensity", intensity);
-        renderer.material = m_material;
+        m_renderer.material = m_material;
 
         transform.localScale = (new Vector3(m_volume.width, m_volume.height, m_volume.depth))/1000;
     }
 
-    /*private void Update()
+    private void Start()
     {
-        if (m_shader.name == "VolumeRendering/Basic" || m_shader.name == "VolumeRendering/Anders")
+        if (emptySpaceSkip)
         {
-            m_material.SetTexture("_Volume", m_volume);
-            m_material.SetFloat("_ThresholdMin", thresholds[0]);
-            m_material.SetFloat("_ThresholdMax", thresholds[1]);
-            m_material.SetVector("_SliceMin", sliceMin);
-            m_material.SetVector("_SliceMax", sliceMax);
-            m_material.SetFloat("_Intensity", intensity);
+            switch (emptySpaceSkipMethod)
+            {
+                case EmptySpaceSkipMethod.UNIFORM:
+                    StartCoroutine(UniformSubdivision());
+                    break;
+                case EmptySpaceSkipMethod.CHEBYSHEV:
+                    break;
+                case EmptySpaceSkipMethod.SPARSELEAP:
+                    break;
+                default:
+                    break;
+            }
         }
-    }*/
+
+    }
 }
