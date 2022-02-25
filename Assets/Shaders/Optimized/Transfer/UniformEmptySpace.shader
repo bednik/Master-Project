@@ -3,8 +3,7 @@ Shader "VolumeRendering/Optimized/UniformEmptySpace"
 	Properties
 	{
 		_Volume("Volume", 3D) = "" {}
-		_GrayTransfer("Grayscale transfer function", 2D) = "" {}
-		_AlphaTransfer("Alpha transfer function", 2D) = "" {}
+		_Transfer("Transfer function", 2D) = "" {}
 		_EmptySpaceSkipStructure("Texture containing hints as to whether said space is empty", 3D) = "" {}
 		_BlockSize("Dimension of each empty-space node", Int) = 8
 		_ERT("Stop the ray after this amount of time", Range(0.0, 1.0)) = 0.95
@@ -27,7 +26,7 @@ Shader "VolumeRendering/Optimized/UniformEmptySpace"
 				#pragma fragment frag
 
 				sampler3D _Volume, _EmptySpaceSkipStructure;
-				sampler2D _GrayTransfer, _AlphaTransfer;
+				sampler2D _Transfer;
 				half _Intensity, _ThresholdMin, _ThresholdMax, _ERT;
 				half3 _SliceMin, _SliceMax;
 				float3 _bbMin, _bbMax;
@@ -121,17 +120,16 @@ Shader "VolumeRendering/Optimized/UniformEmptySpace"
 							temp_ray_pos = current_ray_pos;
 							[loop]
 							for (int iter = block; iter < block + _BlockSize; iter++) {
-								
+
 								// Sample the texture and set the value to 0 if it is outside the slice or not within the value thresholds
 								float density = tex3D(_Volume, temp_ray_pos + 0.5f) * InsideSlice(temp_ray_pos);
 
 								// Two extra texture memory accesses. Can be merged by using a 16-bit 2-channel texture (or 32 bit for color)
-								float src = tex2D(_GrayTransfer, density);
-								float alpha = tex2D(_AlphaTransfer, density);
+								float4 src = tex2D(_Transfer, density);
 
 								oneMinusAlpha = 1 - dst.a;
-								dst.a = mad(alpha, oneMinusAlpha, dst.a);
-								dst.rgb = mad(src * alpha, oneMinusAlpha, dst.rgb);
+								dst.a = mad(src.a, oneMinusAlpha, dst.a);
+								dst.rgb = mad(src.rgb * src.a, oneMinusAlpha, dst.rgb);
 
 								if (dst.a >= _ERT) {
 									dst.a = 1;
@@ -161,7 +159,7 @@ Shader "VolumeRendering/Optimized/UniformEmptySpace"
 						}
 
 					}
-					
+
 
 					dst = saturate(dst);
 

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using MathNet.Numerics.Interpolation;
 using System.Linq;
+using Unity.Collections;
 
 namespace VolumeRendering
 {
@@ -45,7 +46,7 @@ namespace VolumeRendering
         /// <param name="_min">The minimum index of the subvolume</param>
         /// <param name="_max">The maximum index of the subvolume</param>
         /// <param name="_level">How deep in the tree this node is</param>
-        public OctreeNode(CubicSpline alphaTransferFunction, CubicSpline[] colorTransferFunction, Unity.Collections.NativeArray<byte> vol_arr, Vector3 _min, Vector3 _max, byte _level, int[] dims)
+        public OctreeNode(NativeArray<byte> transferFunction, NativeArray<byte> vol_arr, Vector3 _min, Vector3 _max, byte _level, NativeArray<int> dims)
         {
             min = _min;
             max = _max;
@@ -75,11 +76,11 @@ namespace VolumeRendering
 
                         if (empty)
                         {
-                            byte alpha = (byte)Mathf.Max(0, Mathf.Min((float)alphaTransferFunction.Interpolate(elem), 255));
-                            byte[] colors = new byte[colorTransferFunction.Length];
-                            for (int i = 0; i < colorTransferFunction.Length; i++)
+                            byte alpha = transferFunction[elem + 3];
+                            byte[] colors = new byte[3];
+                            for (int i = 0; i < 3; i++)
                             {
-                                colors[i] = (byte)Mathf.Max(0, Mathf.Min((float)colorTransferFunction[i].Interpolate(elem), 255));
+                                colors[i] = transferFunction[elem + i];
                             }
                             // The subvolume is not empty if any of the color channels contain a non-zero value AND the alpha is not zero
                             empty = colors.All(color => color == 0) || alpha == 0;
@@ -98,7 +99,7 @@ namespace VolumeRendering
         }
 
         // Sequential version
-        public OctreeNode(CubicSpline alphaTransferFunction, CubicSpline[] colorTransferFunction, Texture3D vol, Vector3 _min, Vector3 _max, byte _level)
+        public OctreeNode(Texture2D transferFunction, Texture3D vol, Vector3 _min, Vector3 _max, byte _level)
         {
             min = _min;
             max = _max;
@@ -106,6 +107,7 @@ namespace VolumeRendering
 
             // Iterate through desired subsampled volume
             var vol_arr = vol.GetPixelData<byte>(0);
+            byte[] transferFunctionArray = transferFunction.GetRawTextureData();
             minVal = 255;
             maxVal = 0;
             empty = true;
@@ -129,12 +131,12 @@ namespace VolumeRendering
 
                         if (empty)
                         {
-                            byte alpha = (byte)Mathf.Max(0, Mathf.Min((float)alphaTransferFunction.Interpolate(elem), 255));
-                            byte[] colors = new byte[colorTransferFunction.Length];
-                            for (int i = 0; i < colorTransferFunction.Length; i++)
+                            byte[] colors = new byte[3];
+                            for (int i = 0; i < 3; i++)
                             {
-                                colors[i] = (byte)Mathf.Max(0, Mathf.Min((float)colorTransferFunction[i].Interpolate(elem), 255));
+                                colors[i] = transferFunctionArray[i + elem];
                             }
+                            byte alpha = transferFunctionArray[elem + 3];
                             // The subvolume is not empty if any of the color channels contain a non-zero value AND the alpha is not zero
                             empty = colors.All(color => color == 0) || alpha == 0;
                         }
@@ -190,5 +192,19 @@ namespace VolumeRendering
         EMPTY,
         NONEMPTY,
         UNKNOWN
+    }
+
+    enum TransferFunctionType
+    {
+        LINEAR,
+        RAMP,
+        MRDEFAULT
+    }
+
+    enum VolumeType
+    {
+        US,
+        CT,
+        MRI
     }
 }
