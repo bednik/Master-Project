@@ -223,55 +223,6 @@ public class VolumeRenderController : MonoBehaviour
         return redTex;
     }
 
-    byte unisubdiv(NativeArray<byte> transferFunction, NativeArray<byte> vol_arr, Vector3 min, Vector3 max, NativeArray<int> dims)
-    {
-        byte minVal = 255;
-        byte maxVal = 0;
-        bool empty = true;
-
-        for (int z = (int)min.z; z < (int)max.z; z++)
-        {
-            if (z >= dims[2]) break;
-
-            for (int y = (int)min.y; y < (int)max.y; y++)
-            {
-                if (y >= dims[1]) break;
-
-                for (int x = (int)min.x; x < (int)max.x; x++)
-                {
-                    if (x >= dims[0]) break;
-
-                    byte elem = vol_arr[x + y * dims[0] + z * dims[0] * dims[1]];
-
-                    minVal = (elem < minVal) ? elem : minVal;
-                    maxVal = (elem > maxVal) ? elem : maxVal;
-
-                    if (empty)
-                    {
-                        byte alpha = transferFunction[elem + 3];
-                        byte[] colors = new byte[3];
-                        for (int i = 0; i < 3; i++)
-                        {
-                            colors[i] = transferFunction[elem + i];
-                        }
-                        // The subvolume is not empty if any of the color channels contain a non-zero value AND the alpha is not zero
-                        empty = colors.All(color => color == 0) || alpha == 0;
-                    }
-
-                    // Break out of the loop if we reach minimum minVal AND maximum maxVal
-                    if (minVal <= 0 && maxVal >= 255)
-                    {
-                        y = (int)max.y;
-                        z = (int)max.z;
-                        break;
-                    }
-                }
-            }
-        }
-
-        return (empty) ? (byte)0 : (byte)255;
-    }
-
     [BurstCompile(CompileSynchronously = true)]
     struct UniformJob : IJobFor
     {
@@ -458,24 +409,6 @@ public class VolumeRenderController : MonoBehaviour
             m_material.SetTexture("_GrayTransfer", generateGrayTable());
             m_material.SetTexture("_AlphaTransfer", generateAlphaTable());
         }
-
-        if (emptySpaceSkip)
-        {
-            switch (emptySpaceSkipMethod)
-            {
-                case EmptySpaceSkipMethod.UNIFORM: // Very slow!
-                    int[] dims = new int[3] { Mathf.CeilToInt((float)m_volume.width / blockSize), Mathf.CeilToInt((float)m_volume.height / blockSize), Mathf.CeilToInt((float)m_volume.depth / blockSize) };
-                    m_material.SetTexture("_EmptySpaceSkipStructure", RedTex(dims));
-                    m_material.SetInt("_BlockSize", blockSize);
-                    break;
-                case EmptySpaceSkipMethod.CHEBYSHEV:
-                    break;
-                case EmptySpaceSkipMethod.SPARSELEAP:
-                    break;
-                default:
-                    break;
-            }
-        }
         
         m_material.SetFloat("_ThresholdMin", thresholds[0]);
         m_material.SetFloat("_ThresholdMax", thresholds[1]);
@@ -484,25 +417,5 @@ public class VolumeRenderController : MonoBehaviour
         m_renderer.material = m_material;
 
         transform.localScale = (new Vector3(m_volume.width, m_volume.height, m_volume.depth))/1000;
-    }
-
-    private void Start()
-    {
-        if (emptySpaceSkip)
-        {
-            switch (emptySpaceSkipMethod)
-            {
-                case EmptySpaceSkipMethod.UNIFORM:
-                    StartCoroutine(UniformSubdivision(m_renderer.sharedMaterial));
-                    break;
-                case EmptySpaceSkipMethod.CHEBYSHEV:
-                    break;
-                case EmptySpaceSkipMethod.SPARSELEAP:
-                    break;
-                default:
-                    break;
-            }
-        }
-
     }
 }

@@ -78,9 +78,6 @@ public class MRITextureBuilder : EditorWindow
         metadata.TryGetValue("cal_max", out calmax);
         metadata.TryGetValue("cal_min", out calmin);
 
-        var max = np.amax(flatArray);
-        var divisor = Mathf.Ceil((float)(max.GetDouble(0)/255));
-
         // Since my data satisfies this, I'll keep it like this for now
         // In reality, values below calmin are black, those above calmax are white, and those between are something else
         // Sometimes a separate file will define colors for different tissue types in a color lookup table
@@ -90,7 +87,7 @@ public class MRITextureBuilder : EditorWindow
             for (int i = 0; i < textureSize; i++)
             {
                 double val = flatArray.GetDouble(i);
-                colors[i] = (byte)(val / divisor);
+                colors[i] = (byte)(val / 4096);
             }
         }
         else

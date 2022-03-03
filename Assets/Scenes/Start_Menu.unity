@@ -2906,7 +2906,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 1
     m_VerticalOverflow: 1
     m_LineSpacing: 1
-  m_Text: Block size
+  m_Text: Max opacity value
 --- !u!222 &437305727
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -3124,7 +3124,19 @@ MonoBehaviour:
   sliderEndDistance: 0.125
   OnValueUpdated:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 1716856033}
+        m_TargetAssemblyTypeName: VolumeBuilder, Assembly-CSharp
+        m_MethodName: UpdateERT
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
   OnInteractionStarted:
     m_PersistentCalls:
       m_Calls:
@@ -3456,7 +3468,19 @@ MonoBehaviour:
   currentIndex: 0
   OnSelectionEvents:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 1716856033}
+        m_TargetAssemblyTypeName: VolumeBuilder, Assembly-CSharp
+        m_MethodName: PickShaderEvent
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
 --- !u!1 &513018228
 GameObject:
   m_ObjectHideFlags: 0
@@ -6085,11 +6109,25 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   toggleList:
+  - {fileID: 243035021}
   - {fileID: 1260925173}
+  - {fileID: 228115807}
   currentIndex: 0
   OnSelectionEvents:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 1716856033}
+        m_TargetAssemblyTypeName: VolumeBuilder, Assembly-CSharp
+        m_MethodName: PickTransferFunctionEvent
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
 --- !u!1 &1162422014
 GameObject:
   m_ObjectHideFlags: 0
@@ -9138,11 +9176,19 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ff0669bd871a8c34fbd16f0eab3dee7b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  render: {fileID: 1149176535316849556, guid: e6ae4b6bde5da8346bdcef4e3b1eae5f, type: 3}
   volumeList: {fileID: 3459517445227116606}
-  transferFunctionList: {fileID: 0}
-  shaderList: {fileID: 0}
-  ERTSlider: {fileID: 0}
-  ESSSlider: {fileID: 0}
+  transferFunctionList: {fileID: 1124429884}
+  shaderList: {fileID: 507596835}
+  ERTSlider: {fileID: 470926748}
+  ESSSlider: {fileID: 8894920815539481775}
+  shaders:
+  - {fileID: 4800000, guid: 303f54471e26c2544b1ab6660ebf0844, type: 3}
+  - {fileID: 4800000, guid: a32e698848da36f4fa378d179498fd05, type: 3}
+  - {fileID: 4800000, guid: 229b37ebd5fa34a4490d36937d1fdc4e, type: 3}
+  - {fileID: 4800000, guid: 96852a539cba98c44b9d38058b1115b9, type: 3}
+  - {fileID: 4800000, guid: 41bbc43bcd425fc43b9224880663bb84, type: 3}
+  - {fileID: 4800000, guid: 88b4287952327334b944565fcba14ab0, type: 3}
 --- !u!4 &1716856034
 Transform:
   m_ObjectHideFlags: 0
@@ -11107,6 +11153,8 @@ GameObject:
   - component: {fileID: 2107580149}
   - component: {fileID: 2107580148}
   - component: {fileID: 2107580147}
+  - component: {fileID: 2107580155}
+  - component: {fileID: 2107580154}
   m_Layer: 0
   m_Name: TransferFunction_Canvas
   m_TagString: Untagged
@@ -11266,6 +11314,32 @@ RectTransform:
   m_AnchoredPosition: {x: -0.748, y: 0.197}
   m_SizeDelta: {x: 1440, y: 936}
   m_Pivot: {x: 0.5, y: 0.5}
+--- !u!114 &2107580154
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2107580146}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2fcaf896491074042b7ed7684454a412, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  eventsToReceive: 0
+  debounceThreshold: 0.01
+--- !u!114 &2107580155
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2107580146}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ff4e3b9019304b5aaec5664de0778d21, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &1107481237422719
 GameObject:
   m_ObjectHideFlags: 0
@@ -12123,7 +12197,19 @@ MonoBehaviour:
     - {fileID: 11400000, guid: 747264624b7f3934b8b507fdb1a20e51, type: 2}
   OnClick:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 1716856033}
+        m_TargetAssemblyTypeName: VolumeBuilder, Assembly-CSharp
+        m_MethodName: Build
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
   Events:
   - Event:
       m_PersistentCalls:
@@ -15667,7 +15753,19 @@ MonoBehaviour:
   sliderEndDistance: 0.125
   OnValueUpdated:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 1716856033}
+        m_TargetAssemblyTypeName: VolumeBuilder, Assembly-CSharp
+        m_MethodName: UpdateBlockSize
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
   OnInteractionStarted:
     m_PersistentCalls:
       m_Calls:

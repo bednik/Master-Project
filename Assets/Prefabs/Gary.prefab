@@ -15,7 +15,6 @@ GameObject:
   - component: {fileID: 1149176535316849555}
   - component: {fileID: 1149176535316849554}
   - component: {fileID: 1149176535316849557}
-  - component: {fileID: 1149176535316849548}
   - component: {fileID: 1149176535316849549}
   m_Layer: 0
   m_Name: Gary
@@ -33,7 +32,7 @@ Transform:
   m_GameObject: {fileID: 1149176535316849556}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: -0.1, z: 1.28}
-  m_LocalScale: {x: 0.256, y: 0.256, z: 0.735}
+  m_LocalScale: {x: 0.154, y: 0.154, z: 0.441}
   m_Children: []
   m_Father: {fileID: 0}
   m_RootOrder: 0
@@ -45,7 +44,7 @@ MeshFilter:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1149176535316849556}
-  m_Mesh: {fileID: 0}
+  m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
 --- !u!23 &1149176535316849553
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -171,78 +170,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   ShowTetherWhenManipulating: 0
   IsBoundsHandles: 0
---- !u!114 &1149176535316849548
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1149176535316849556}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 8611492dce4d8314ba93dc8df33a61ec, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  m_shader: {fileID: 4800000, guid: 6e6dfb81af22d4f4f954077a41b9896e, type: 3}
-  m_volume: {fileID: 11700000, guid: ec3bef34c2231ab4f8765bd3c63b90bc, type: 2}
-  completeSound: {fileID: 1149176535316849549}
-  color: 1
-  emptySpaceSkip: 0
-  emptySpaceSkipMethod: 0
-  blockSize: 32
-  octreeLevels: 2
-  thresholds:
-  - 0.05
-  - 0.95
-  sliceMin: {x: -0.5, y: -0.5, z: -0.5, w: 1}
-  sliceMax: {x: 0.5, y: 0.5, z: 0.5, w: 1}
-  colorPoints:
-  - r: 255
-    g: 255
-    b: 255
-    density: 0
-  - r: 255
-    g: 255
-    b: 255
-    density: 40
-  - r: 255
-    g: 255
-    b: 255
-    density: 80
-  - r: 255
-    g: 255
-    b: 255
-    density: 82
-  - r: 255
-    g: 255
-    b: 255
-    density: 255
-  grayscalePoints:
-  - a: 255
-    density: 0
-  - a: 255
-    density: 40
-  - a: 255
-    density: 80
-  - a: 255
-    density: 82
-  - a: 255
-    density: 255
-  alphaPoints:
-  - a: 0
-    density: 0
-  - a: 0
-    density: 40
-  - a: 60
-    density: 60
-  - a: 63
-    density: 63
-  - a: 80
-    density: 80
-  - a: 82
-    density: 82
-  - a: 255
-    density: 255
 --- !u!82 &1149176535316849549
 AudioSource:
   m_ObjectHideFlags: 0

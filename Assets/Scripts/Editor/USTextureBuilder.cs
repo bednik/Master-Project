@@ -8,7 +8,8 @@ using System.IO;
 public class USTextureBuilder : EditorWindow
 {
     string inputPath, outputPath;
-    int width = 186, height = 186, depth = 186;
+    int width = 186, height = 186, depth = 186, amount = 11;
+    bool generate = false, generating = false;
 
     [MenuItem("Window/3D Texture Builders/Ultrasound Texture Builder")]
     public static void ShowWindow()
@@ -18,8 +19,8 @@ public class USTextureBuilder : EditorWindow
 
     void OnEnable()
     {
-        inputPath = "Assets/Resources/VolumeRaw/US/";
-        outputPath = "Assets/Resources/VolumeTextures/US/";
+        inputPath = "Assets/Resources/VolumeRaw/US/A6/";
+        outputPath = "Assets/Resources/VolumeTextures/US/A6/";
     }
 
     void GenerateTexture(string inputPath, string outputPath, int width, int height, int depth)
@@ -29,6 +30,7 @@ public class USTextureBuilder : EditorWindow
             Debug.LogError("Error: File not found. The numpy array at " + inputPath + " does not exist");
             return;
         }
+        Debug.Log("Generating texture from " + inputPath);
 
         int textureSize = width * height * depth;
 
@@ -60,22 +62,65 @@ public class USTextureBuilder : EditorWindow
         density.SetPixelData(densityVals, 0);
         density.Apply();
 
+        Debug.Log("Finished generating texture at " + outputPath);
+
         AssetDatabase.CreateAsset(density, outputPath);
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
     }
 
+    void generateTextures(string inputPath, string outputPath, int width, int height, int depth, int amount)
+    {
+        if (!Directory.Exists(outputPath))
+        {
+            Directory.CreateDirectory(outputPath);
+        }
+
+        for (int i = 1; i <= amount + 1; i++)
+        {
+            string volPath = "";
+            string outPath = "";
+            if (i < 10)
+            {
+                volPath = inputPath + "vol0" + i + ".npy";
+                outPath = outputPath + "vol0" + i + ".asset";
+            }
+            else
+            {
+                
+                volPath = inputPath + "vol" + i + ".npy";
+                outPath = outputPath + "vol0" + i + ".asset";
+            }
+
+            
+
+            GenerateTexture(volPath, outPath, width, height, depth);
+        }
+    }
+
     void OnGUI()
     {
-        inputPath = EditorGUILayout.TextField("Input numpy array file", inputPath);
-        outputPath = EditorGUILayout.TextField("Output texture path", outputPath);
+        inputPath = EditorGUILayout.TextField("Input folder", inputPath);
+        outputPath = EditorGUILayout.TextField("Output texture folder", outputPath);
         width = EditorGUILayout.IntField("Width:", width);
         height = EditorGUILayout.IntField("Height:", height);
         depth = EditorGUILayout.IntField("Depth:", depth);
+        amount = EditorGUILayout.IntField("Amount of images:", amount);
 
         if (GUILayout.Button("Generate texture"))
         {
-            GenerateTexture(inputPath, outputPath, width, height, depth);
+            generate = true;
+        }
+    }
+
+    private void Update()
+    {
+        if (!generating && generate)
+        {
+            generate = false;
+            generating = true;
+            Debug.Log("Test");
+            generateTextures(inputPath, outputPath, width, height, depth, amount);
         }
     }
 }

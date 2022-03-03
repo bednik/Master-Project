@@ -5,23 +5,30 @@ using VolumeRendering;
 using VolumeRendering.UI;
 using MathNet.Numerics.Interpolation;
 using Microsoft.MixedReality.Toolkit.UI;
+using Unity.Burst;
+using Unity.Collections;
+using Unity.Jobs;
 
 public class VolumeBuilder : MonoBehaviour
 {
     private Shader m_shader;
     private Texture3D m_volume;
-    private Texture2D transferFunction;
+    public Texture2D transferFunction;
     private MeshRenderer m_renderer;
     private float m_ERT;
-    private int m_blockSize;
+    private int m_blockSize, shaderIndex;
     private Material material;
     private VolumeType volumeType;
+    private bool emptySpaceSkip;
+    private EmptySpaceSkipMethod emptySpaceSkipMethod;
+    [SerializeField] private GameObject render;
 
     [SerializeField] InteractableToggleCollection volumeList;
     [SerializeField] InteractableToggleCollection transferFunctionList;
     [SerializeField] InteractableToggleCollection shaderList;
     [SerializeField] SimpleSliderBehaviour ERTSlider;
     [SerializeField] ClampedSlider ESSSlider;
+    [SerializeField] Shader[] shaders = new Shader[3];
 
     #region Transfer functions
 
@@ -120,9 +127,9 @@ public class VolumeBuilder : MonoBehaviour
                 colorTransferFunctionPoints = new List<ColorTransferFunctionPoint>
                 {
                     new ColorTransferFunctionPoint(0, 0, 0, 0),
-                    new ColorTransferFunctionPoint(42, 0, 0, 20),
-                    new ColorTransferFunctionPoint(101, 36, 19, 40),
-                    new ColorTransferFunctionPoint(197, 153, 95, 40),
+                    new ColorTransferFunctionPoint(43, 0, 0, 20),
+                    new ColorTransferFunctionPoint(103, 37, 20, 40),
+                    new ColorTransferFunctionPoint(199, 155, 97, 120),
                     new ColorTransferFunctionPoint(216, 213, 201, 220),
                     new ColorTransferFunctionPoint(255, 255, 255, 255),
                 };
@@ -157,49 +164,185 @@ public class VolumeBuilder : MonoBehaviour
 
     #region Empty space skipping
 
-    private IEnumerator UniformSubdivision()
+    [BurstCompile(CompileSynchronously = true)]
+    struct UniformJob : IJobFor
+    {
+        [WriteOnly] public NativeArray<byte> textureData;
+
+        [ReadOnly] public NativeArray<byte> volume;
+        [ReadOnly] public NativeArray<int> originalDims;
+        [ReadOnly] public NativeArray<int> dims;
+        [ReadOnly] public int blockSize;
+        [ReadOnly] public NativeArray<byte> transferFunction;
+
+        public void Execute(int index)
+        {
+            int temp = index;
+
+            int minZ = temp / (dims[0] * dims[1]);
+            temp -= minZ * dims[0] * dims[1];
+
+            int minY = temp / dims[0];
+            temp -= minY * dims[0];
+
+            int minX = temp;
+
+            Vector3 min = new Vector3(minX * blockSize, minY * blockSize, minZ * blockSize);
+            Vector3 max = min + new Vector3(blockSize, blockSize, blockSize);
+
+            byte minVal = 255;
+            byte maxVal = 0;
+            bool empty = true;
+
+            for (int z = (int)min.z; z < (int)max.z; z++)
+            {
+                if (z >= originalDims[2]) break;
+
+                for (int y = (int)min.y; y < (int)max.y; y++)
+                {
+                    if (y >= originalDims[1]) break;
+
+                    for (int x = (int)min.x; x < (int)max.x; x++)
+                    {
+                        if (x >= originalDims[0]) break;
+
+                        byte elem = volume[x + y * originalDims[0] + z * originalDims[0] * originalDims[1]];
+
+                        minVal = (elem < minVal) ? elem : minVal;
+                        maxVal = (elem > maxVal) ? elem : maxVal;
+
+                        if (empty)
+                        {
+                            byte alpha = transferFunction[elem + 3];
+                            byte r, g, b;
+                            r = transferFunction[elem];
+                            g = transferFunction[elem + 1];
+                            b = transferFunction[elem + 2];
+                            // The subvolume is not empty if any of the color channels contain a non-zero value AND the alpha is not zero
+                            empty = (r == 0 && g == 0 && b == 0) || alpha == 0;
+                        }
+
+                        // Break out of the loop if we reach minimum minVal AND maximum maxVal
+                        if (minVal <= 0 && maxVal >= 255)
+                        {
+                            y = (int)max.y;
+                            z = (int)max.z;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            textureData[index] = (empty) ? (byte)0 : (byte)255;
+        }
+    }
+
+    private void UniformSubdivision(Material material)
     {
         int[] dims = new int[3] { Mathf.CeilToInt((float)m_volume.width / m_blockSize), Mathf.CeilToInt((float)m_volume.height / m_blockSize), Mathf.CeilToInt((float)m_volume.depth / m_blockSize) };
         byte[] textureData = new byte[dims[0] * dims[1] * dims[2]];
-        int idx = 0;
 
-        for (int z = 0; z < m_volume.depth; z += m_blockSize)
+        NativeArray<byte> volumeData = new NativeArray<byte>(m_volume.GetPixelData<byte>(0), Allocator.TempJob);
+        NativeArray<byte> textureDataNative = new NativeArray<byte>(textureData, Allocator.TempJob);
+        NativeArray<int> originalDims = new NativeArray<int>(new int[3] { m_volume.width, m_volume.height, m_volume.depth }, Allocator.TempJob);
+        NativeArray<int> dimsNative = new NativeArray<int>(dims, Allocator.TempJob);
+        NativeArray<byte> transferFunc = new NativeArray<byte>(((Texture2D)material.GetTexture("_Transfer")).GetRawTextureData(), Allocator.TempJob);
+
+        var job = new UniformJob()
         {
-            for (int y = 0; y < m_volume.height; y += m_blockSize)
-            {
-                for (int x = 0; x < m_volume.width; x += m_blockSize)
-                {
-                    textureData[idx] = new OctreeNode((Texture2D)material.GetTexture("_Transfer"), m_volume, new Vector3(x, y, z), new Vector3(x + m_blockSize, y + m_blockSize, z + m_blockSize), 0).empty ? (byte)0 : (byte)255; idx++;
-                    yield return new WaitForSecondsRealtime(0.001f);
-                }
+            textureData = textureDataNative,
+            volume = volumeData,
+            originalDims = originalDims,
+            dims = dimsNative,
+            blockSize = m_blockSize,
+            transferFunction = transferFunc,
+        };
 
-            }
-            Debug.Log(string.Format("{0} out of {1} points done", idx, dims[0] * dims[1] * dims[2]));
-        }
+        JobHandle dep = new JobHandle();
+        JobHandle jobHandle = job.ScheduleParallel(dims[0] * dims[1] * dims[2], 1, dep);
+
+        jobHandle.Complete();
+
+        volumeData.Dispose();
+        originalDims.Dispose();
+        dimsNative.Dispose();
+        transferFunc.Dispose();
 
         Texture3D subdivision = new Texture3D(dims[0], dims[1], dims[2], TextureFormat.R8, false);
         subdivision.wrapMode = TextureWrapMode.Clamp;
         subdivision.filterMode = FilterMode.Bilinear;
         subdivision.anisoLevel = 0;
 
-        subdivision.SetPixelData(textureData, 0);
+        subdivision.SetPixelData(textureDataNative.ToArray(), 0);
         subdivision.Apply();
+        textureDataNative.Dispose();
 
-        m_renderer.sharedMaterial.SetTexture("_EmptySpaceSkipStructure", subdivision);
-        yield return null;
+        material.SetTexture("_EmptySpaceSkipStructure", subdivision);
     }
 
     #endregion
 
     #region Event listeners
 
+    public void Build()
+    {
+        GameObject gary = Instantiate(render, new Vector3(0, 0, 0), Quaternion.identity);
+        Transform transform = gary.GetComponent<Transform>();
+        Bounds localAABB = gary.GetComponent<MeshFilter>().sharedMesh.bounds;
+
+        material.SetTexture("_Transfer", transferFunction);
+        material.SetTexture("_Volume", m_volume);
+        material.SetVector("_bbMin", localAABB.min);
+        material.SetVector("_bbMax", localAABB.max);
+
+        if (emptySpaceSkip)
+        {
+            switch (emptySpaceSkipMethod)
+            {
+                case EmptySpaceSkipMethod.UNIFORM:
+                    UniformSubdivision(material);
+                    material.SetInt("_BlockSize", m_blockSize);
+                    break;
+                case EmptySpaceSkipMethod.CHEBYSHEV:
+                    break;
+                case EmptySpaceSkipMethod.SPARSELEAP:
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        gary.GetComponent<MeshRenderer>().material = material;
+        transform.localScale = (new Vector3(m_volume.width, m_volume.height, m_volume.depth)) / 1000;
+    }
+
     public void PickVolumeEvent()
     {
         StartCoroutine(PickVolume());
     }
 
+    public void PickShaderEvent()
+    {
+        shaderIndex = shaderList.CurrentIndex;
+        m_shader = shaders[shaderIndex];
+        material = new Material(m_shader);
+
+        emptySpaceSkip = shaderIndex > 2;
+    }
+
+    public void UpdateERT()
+    {
+        m_ERT = ERTSlider.CurrentValue;
+    }
+
+    public void UpdateBlockSize()
+    {
+        m_blockSize = ESSSlider.CurrentValue;
+    }
+
     public void PickTransferFunctionEvent()
     {
+        Debug.Log(((TransferFunctionType)transferFunctionList.CurrentIndex).ToString());
         transferFunction = GenerateTransferFunction((TransferFunctionType)transferFunctionList.CurrentIndex);
     }
 
@@ -210,7 +353,7 @@ public class VolumeBuilder : MonoBehaviour
         {
             case 0:
                 volumeType = VolumeType.US;
-                req = Resources.LoadAsync("VolumeTextures/US/us");
+                req = Resources.LoadAsync("VolumeTextures/US/A6/vol01");
                 break;
             case 1:
                 volumeType = VolumeType.CT;

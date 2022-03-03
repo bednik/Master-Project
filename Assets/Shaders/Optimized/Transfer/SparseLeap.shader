@@ -1,4 +1,4 @@
-Shader "Custom/SparseLeap"
+Shader "VolumeRendering/Optimized/SparseLeap"
 {
     Properties
     {

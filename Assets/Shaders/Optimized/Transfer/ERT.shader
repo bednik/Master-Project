@@ -115,8 +115,6 @@ Shader "VolumeRendering/Optimized/ERT"
 					{
 						// Sample the texture and set the value to 0 if it is outside the slice or not within the value thresholds
 						float density = tex3D(_Volume, current_ray_pos + 0.5f) * InsideSlice(current_ray_pos);
-
-						// Two extra texture memory accesses. Can be merged by using a 16-bit 2-channel texture (or 32 bit for color)
 						float4 src = tex2D(_Transfer, density);
 
 						oneMinusAlpha = 1 - dst.a;
