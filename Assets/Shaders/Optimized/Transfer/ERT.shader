@@ -29,7 +29,7 @@ Shader "VolumeRendering/Optimized/ERT"
 				half _Intensity, _ThresholdMin, _ThresholdMax, _ERT;
 				half3 _SliceMin, _SliceMax;
 				float3 _bbMin, _bbMax;
-				#define SAMPLEPOINTS 256
+				#define SAMPLEPOINTS 441
 
 				struct Ray {
 					float3 origin;

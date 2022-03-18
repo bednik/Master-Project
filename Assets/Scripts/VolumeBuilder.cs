@@ -11,6 +11,8 @@ using Unity.Jobs;
 
 public class VolumeBuilder : MonoBehaviour
 {
+    #region Volume Builder fields
+
     private Shader m_shader;
     private Texture3D m_volume;
     public Texture2D transferFunction;
@@ -29,6 +31,8 @@ public class VolumeBuilder : MonoBehaviour
     [SerializeField] SimpleSliderBehaviour ERTSlider;
     [SerializeField] ClampedSlider ESSSlider;
     [SerializeField] Shader[] shaders = new Shader[3];
+
+    #endregion
 
     #region Transfer functions
 
@@ -190,8 +194,8 @@ public class VolumeBuilder : MonoBehaviour
             Vector3 min = new Vector3(minX * blockSize, minY * blockSize, minZ * blockSize);
             Vector3 max = min + new Vector3(blockSize, blockSize, blockSize);
 
-            byte minVal = 255;
-            byte maxVal = 0;
+            //byte minVal = 255;
+            //byte maxVal = 0;
             bool empty = true;
 
             for (int z = (int)min.z; z < (int)max.z; z++)
@@ -208,8 +212,8 @@ public class VolumeBuilder : MonoBehaviour
 
                         byte elem = volume[x + y * originalDims[0] + z * originalDims[0] * originalDims[1]];
 
-                        minVal = (elem < minVal) ? elem : minVal;
-                        maxVal = (elem > maxVal) ? elem : maxVal;
+                        //minVal = (elem < minVal) ? elem : minVal;
+                        //maxVal = (elem > maxVal) ? elem : maxVal;
 
                         if (empty)
                         {
@@ -218,12 +222,12 @@ public class VolumeBuilder : MonoBehaviour
                             r = transferFunction[elem];
                             g = transferFunction[elem + 1];
                             b = transferFunction[elem + 2];
-                            // The subvolume is not empty if any of the color channels contain a non-zero value AND the alpha is not zero
-                            empty = (r == 0 && g == 0 && b == 0) || alpha == 0;
+                            // The subvolume is empty the alpha is zero
+                            empty = alpha == 0;
                         }
 
                         // Break out of the loop if we reach minimum minVal AND maximum maxVal
-                        if (minVal <= 0 && maxVal >= 255)
+                        if (!empty)
                         {
                             y = (int)max.y;
                             z = (int)max.z;
@@ -237,7 +241,7 @@ public class VolumeBuilder : MonoBehaviour
         }
     }
 
-    private void UniformSubdivision(Material material)
+    private Texture3D UniformSubdivision(Material material)
     {
         int[] dims = new int[3] { Mathf.CeilToInt((float)m_volume.width / m_blockSize), Mathf.CeilToInt((float)m_volume.height / m_blockSize), Mathf.CeilToInt((float)m_volume.depth / m_blockSize) };
         byte[] textureData = new byte[dims[0] * dims[1] * dims[2]];
@@ -270,14 +274,14 @@ public class VolumeBuilder : MonoBehaviour
 
         Texture3D subdivision = new Texture3D(dims[0], dims[1], dims[2], TextureFormat.R8, false);
         subdivision.wrapMode = TextureWrapMode.Clamp;
-        subdivision.filterMode = FilterMode.Bilinear;
+        subdivision.filterMode = FilterMode.Point;
         subdivision.anisoLevel = 0;
 
         subdivision.SetPixelData(textureDataNative.ToArray(), 0);
         subdivision.Apply();
         textureDataNative.Dispose();
 
-        material.SetTexture("_EmptySpaceSkipStructure", subdivision);
+        return subdivision;
     }
 
     #endregion
@@ -286,22 +290,31 @@ public class VolumeBuilder : MonoBehaviour
 
     public void Build()
     {
-        GameObject gary = Instantiate(render, new Vector3(0, 0, 0), Quaternion.identity);
+        GameObject gary = Instantiate(render, new Vector3(0, -0.2f, 1f), Quaternion.identity);
         Transform transform = gary.GetComponent<Transform>();
         Bounds localAABB = gary.GetComponent<MeshFilter>().sharedMesh.bounds;
 
         material.SetTexture("_Transfer", transferFunction);
         material.SetTexture("_Volume", m_volume);
-        material.SetVector("_bbMin", localAABB.min);
-        material.SetVector("_bbMax", localAABB.max);
+        material.SetVector("_bbMin", localAABB.min/* + new Vector3(0.5f, 0.5f, 0.5f)*/);
+        material.SetVector("_bbMax", localAABB.max/* + new Vector3(0.5f, 0.5f, 0.5f)*/);
+        material.SetFloat("_ERT", m_ERT);
 
         if (emptySpaceSkip)
         {
             switch (emptySpaceSkipMethod)
             {
                 case EmptySpaceSkipMethod.UNIFORM:
-                    UniformSubdivision(material);
+                    material.SetTexture("_EmptySpaceSkipStructure", UniformSubdivision(material));
                     material.SetInt("_BlockSize", m_blockSize);
+                    material.SetVector("_VolumeDims", new Vector3(m_volume.width, m_volume.height, m_volume.depth));
+                    material.SetVector("_OccupancyDims", new Vector3(Mathf.CeilToInt((float)m_volume.width / m_blockSize), Mathf.CeilToInt((float)m_volume.height / m_blockSize), Mathf.CeilToInt((float)m_volume.depth / m_blockSize)));
+                    break;
+                case EmptySpaceSkipMethod.OCCUPANCY:
+                    material.SetTexture("_OccupancyMap", UniformSubdivision(material));
+                    material.SetInt("_BlockSize", m_blockSize);
+                    material.SetVector("_VolumeDims", new Vector3(m_volume.width, m_volume.height, m_volume.depth));
+                    material.SetVector("_OccupancyDims", new Vector3(Mathf.CeilToInt((float)m_volume.width / m_blockSize), Mathf.CeilToInt((float)m_volume.height / m_blockSize), Mathf.CeilToInt((float)m_volume.depth / m_blockSize)));
                     break;
                 case EmptySpaceSkipMethod.CHEBYSHEV:
                     break;
@@ -314,6 +327,7 @@ public class VolumeBuilder : MonoBehaviour
 
         gary.GetComponent<MeshRenderer>().material = material;
         transform.localScale = (new Vector3(m_volume.width, m_volume.height, m_volume.depth)) / 1000;
+        Destroy(this.transform.parent.gameObject);
     }
 
     public void PickVolumeEvent()
@@ -328,6 +342,22 @@ public class VolumeBuilder : MonoBehaviour
         material = new Material(m_shader);
 
         emptySpaceSkip = shaderIndex > 2;
+        if (shaderIndex == 3)
+        {
+            emptySpaceSkipMethod = EmptySpaceSkipMethod.UNIFORM;
+        }
+        else if (shaderIndex == 4)
+        {
+            emptySpaceSkipMethod = EmptySpaceSkipMethod.OCCUPANCY;
+        }
+        else if (shaderIndex == 5)
+        {
+            emptySpaceSkipMethod = EmptySpaceSkipMethod.SPARSELEAP;
+        }
+        else if (shaderIndex == 6)
+        {
+            emptySpaceSkipMethod = EmptySpaceSkipMethod.CHEBYSHEV;
+        }
     }
 
     public void UpdateERT()

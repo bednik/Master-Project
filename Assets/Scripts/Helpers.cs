@@ -183,6 +183,7 @@ namespace VolumeRendering
     enum EmptySpaceSkipMethod
     {
         UNIFORM,
+        OCCUPANCY,
         CHEBYSHEV,
         SPARSELEAP
     }

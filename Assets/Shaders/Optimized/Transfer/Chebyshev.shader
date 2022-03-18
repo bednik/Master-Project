@@ -1,53 +1,184 @@
 Shader "VolumeRendering/Optimized/Chebyshev"
 {
-    Properties
-    {
-        _Color("Color", Color) = (1,1,1,1)
-        _MainTex("Albedo (RGB)", 2D) = "white" {}
-        _Glossiness("Smoothness", Range(0,1)) = 0.5
-        _Metallic("Metallic", Range(0,1)) = 0.0
-    }
-        SubShader
-        {
-            Tags { "RenderType" = "Opaque" }
-            LOD 200
+	Properties
+	{
+		_Volume("Volume", 3D) = "" {}
+		_Transfer("Transfer function", 2D) = "" {}
+		_EmptySpaceSkipStructure("Texture containing hints as to whether said space is empty", 3D) = "" {}
+		_BlockSize("Dimension of each empty-space node", Int) = 8
+		_ERT("Stop the ray after this amount of time", Range(0.0, 1.0)) = 0.95
+		_SliceMin("Slice min", Vector) = (-0.5, -0.5, -0.5, 1.0)
+		_SliceMax("Slice max", Vector) = (0.5, 0.5, 0.5, 1.0)
+		_bbMin("Volume's minimum coord of bounding box", Vector) = (-0.5, -0.5, -0.5, 1.0)
+		_bbMax("Volume's maximum coord of bounding box", Vector) = (0.5, 0.5, 0.5, 1.0)
+		_VolumeDims("Dimensions of the volume", Vector) = (154, 154, 441)
+		_Quality("Quality factor for amount of sample points", Range(1.0, 5.0)) = 1.0
+	}
 
-            CGPROGRAM
-            // Physically based Standard lighting model, and enable shadows on all light types
-            #pragma surface surf Standard fullforwardshadows
+		SubShader
+		{
+			// Setting the renderqueue to "Transparent" makes it prettier in the editor
+			Tags { "Queue" = "Transparent" "DisableBatching" = "True"}
+			Blend SrcAlpha OneMinusSrcAlpha
 
-            // Use shader model 3.0 target, to get nicer looking lighting
-            #pragma target 3.0
+			Pass
+			{
+				CGPROGRAM
+				#pragma vertex vert
+				#pragma fragment frag
 
-            sampler2D _MainTex;
+				sampler3D _Volume, _EmptySpaceSkipStructure;
+				sampler2D _Transfer;
+				half _Intensity, _ThresholdMin, _ThresholdMax, _ERT;
+				half3 _SliceMin, _SliceMax;
+				float3 _bbMin, _bbMax;
+				half _BlockSize;
+				half3 _VolumeDims;
+				half _Quality;
 
-            struct Input
-            {
-                float2 uv_MainTex;
-            };
+				#define SAMPLEPOINTS 256
 
-            half _Glossiness;
-            half _Metallic;
-            fixed4 _Color;
+				struct Ray {
+					float3 origin;
+					float3 dir;
+				};
 
-            // Add instancing support for this shader. You need to check 'Enable Instancing' on materials that use the shader.
-            // See https://docs.unity3d.com/Manual/GPUInstancing.html for more information about instancing.
-            // #pragma instancing_options assumeuniformscaling
-            UNITY_INSTANCING_BUFFER_START(Props)
-                // put more per-instance properties here
-            UNITY_INSTANCING_BUFFER_END(Props)
+				struct vertexData
+				{
+					float4 pos : POSITION;
+					float2 uv : TEXCOORD0;
+				};
 
-            void surf(Input IN, inout SurfaceOutputStandard o)
-            {
-                // Albedo comes from a texture tinted by color
-                fixed4 c = tex2D(_MainTex, IN.uv_MainTex) * _Color;
-                o.Albedo = c.rgb;
-                // Metallic and smoothness come from slider variables
-                o.Metallic = _Metallic;
-                o.Smoothness = _Glossiness;
-                o.Alpha = c.a;
-            }
-            ENDCG
-        }
-            FallBack "Diffuse"
+				struct v2f
+				{
+					float4 vertex : SV_POSITION;
+					float2 uv : TEXCOORD0;
+					float3 world : TEXCOORD1;
+					float3 local : TEXCOORD2;
+				};
+
+				// Adapted from https://stackoverflow.com/questions/28006184/get-component-wise-maximum-of-vector-in-glsl
+				float max3(float3 v) {
+					return max(max(v.x, v.y), v.z);
+				}
+
+				float min3(float3 v) {
+					return min(min(v.x, v.y), v.z);
+				}
+
+				// Returns 1 if point p is within the specified slice boundaries, 1 otherwise
+				float InsideSlice(float3 p) {
+					return step(_SliceMin.x, p.x) * step(_SliceMin.y, p.y) * step(_SliceMin.z, p.z) * step(p.x, _SliceMax.x) * step(p.y, _SliceMax.y) * step(p.z, _SliceMax.z);
+				}
+
+				// Returns 1 if texture value is within the specified thresholds, 0 otherwise
+				float InsideThreshold(float val) {
+					return step(_ThresholdMin, val) * step(val, _ThresholdMax);
+				}
+
+				// Adapted from intersectAABB in https://gist.github.com/DomNomNom/46bb1ce47f68d255fd5d
+				void intersectAABB(float3 origin, float3 rayDir, out float3 entrance, out float3 exit) {
+					float3 invRayDir = 1 / rayDir;
+					float3 intersectionMin = (_bbMin - origin) * invRayDir;
+					float3 intersectionMax = (_bbMax - origin) * invRayDir;
+
+					entrance = min(intersectionMin, intersectionMax);
+					exit = max(intersectionMin, intersectionMax);
+				};
+
+				// t_i = t_entry + i * delta_t
+				float3 findSamplingPoint(int i, float3 delta_t, float3 t) {
+					return mad(i, delta_t, t); 
+				}
+
+				int delta_i(float3 delta_u, float3 u) {
+					return ceil(((delta_u > 0) + floor(u) - u) / delta_u);
+				}
+
+				// Vertex kernel //
+				v2f vert(vertexData v)
+				{
+					v2f o;
+					o.vertex = UnityObjectToClipPos(v.pos);
+					o.uv = v.uv;
+					o.world = mul(unity_ObjectToWorld, v.pos).xyz;
+					o.local = v.pos.xyz;
+					return o;
+				}
+
+				// Fragment kernel //
+				fixed4 frag(v2f i) : SV_Target
+				{
+					Ray ray;
+					ray.origin = i.local;
+
+					float3 dir = (i.world - _WorldSpaceCameraPos);
+					ray.dir = normalize(mul(unity_WorldToObject, dir));
+
+					float3 entrance, exit;
+					intersectAABB(ray.origin, ray.dir, entrance, exit);
+
+					int n = ceil(max3(_VolumeDims) * length(exit - entrance) * _Quality);
+					float3 delta_t = (exit - entrance) / (n - 1);
+
+					// Set up output and shader pass values
+					float oneMinusAlpha = 0;
+					float4 dst = float4(0, 0, 0, 0);
+					float3 current_ray_pos = entrance;
+					float3 temp_ray_pos = current_ray_pos;
+
+
+
+					/*
+					[loop]
+					for (int block = 0; block < N; block += _BlockSize) {
+						if (InsideSlice(current_ray_pos) == 0) {
+							break;
+						}
+						float val = tex3D(_EmptySpaceSkipStructure, current_ray_pos + 0.5f);
+						if (val != 0.0) {
+							temp_ray_pos = current_ray_pos;
+							[loop]
+							for (int iter = block; iter < block + _BlockSize; iter++) {
+
+								if (InsideSlice(temp_ray_pos) == 0) {
+									break;
+								}
+								// Sample the texture and set the value to 0 if it is outside the slice or not within the value thresholds
+								float density = tex3D(_Volume, temp_ray_pos + 0.5f);
+
+								// Two extra texture memory accesses. Can be merged by using a 16-bit 2-channel texture (or 32 bit for color)
+								float4 src = tex2D(_Transfer, density);
+
+								oneMinusAlpha = 1 - dst.a;
+								dst.a = mad(src.a, oneMinusAlpha, dst.a);
+								dst.rgb = mad(src.rgb * src.a, oneMinusAlpha, dst.rgb);
+
+								if (dst.a >= _ERT) {
+									dst.a = 1;
+									break;
+								}
+
+								temp_ray_pos += ray_step;
+							}
+							current_ray_pos = temp_ray_pos;
+						}
+						else {
+							current_ray_pos = mad(_BlockSize, ray_step, current_ray_pos);
+						}
+
+						if (dst.a >= _ERT) {
+							dst.a = 1;
+							break;
+						}
+					}*/
+
+
+					dst = saturate(dst);
+
+					return dst;
+				}
+			ENDCG
+			}
+		}
 }

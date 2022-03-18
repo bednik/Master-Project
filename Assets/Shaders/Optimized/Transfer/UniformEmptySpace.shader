@@ -16,7 +16,7 @@ Shader "VolumeRendering/Optimized/UniformEmptySpace"
 		SubShader
 		{
 			// Setting the renderqueue to "Transparent" makes it prettier in the editor
-			//Tags { "Queue" = "Transparent" "DisableBatching" = "True"}
+			Tags { "Queue" = "Transparent" "DisableBatching" = "True"}
 			Blend SrcAlpha OneMinusSrcAlpha
 
 			Pass
@@ -100,9 +100,7 @@ Shader "VolumeRendering/Optimized/UniformEmptySpace"
 				{
 					Ray ray;
 					ray.origin = i.local;
-
-					float3 dir = (i.world - _WorldSpaceCameraPos);
-					ray.dir = normalize(mul(unity_WorldToObject, dir));
+					ray.dir = normalize(mul(unity_WorldToObject, i.world - _WorldSpaceCameraPos));
 
 					float2 boundingBoxIntersections = intersectAABB(ray.origin, ray.dir);
 					float3 ray_step = calculateStep(boundingBoxIntersections, ray);
@@ -115,14 +113,20 @@ Shader "VolumeRendering/Optimized/UniformEmptySpace"
 
 					[loop]
 					for (int block = 0; block < SAMPLEPOINTS; block += _BlockSize) {
+						if (InsideSlice(current_ray_pos) == 0) {
+							break;
+						}
 						float val = tex3D(_EmptySpaceSkipStructure, current_ray_pos + 0.5f);
 						if (val != 0.0) {
 							temp_ray_pos = current_ray_pos;
 							[loop]
 							for (int iter = block; iter < block + _BlockSize; iter++) {
 
+								if (InsideSlice(temp_ray_pos) == 0) {
+									break;
+								}
 								// Sample the texture and set the value to 0 if it is outside the slice or not within the value thresholds
-								float density = tex3D(_Volume, temp_ray_pos + 0.5f) * InsideSlice(temp_ray_pos);
+								float density = tex3D(_Volume, temp_ray_pos + 0.5f);
 
 								// Two extra texture memory accesses. Can be merged by using a 16-bit 2-channel texture (or 32 bit for color)
 								float4 src = tex2D(_Transfer, density);
@@ -137,10 +141,6 @@ Shader "VolumeRendering/Optimized/UniformEmptySpace"
 								}
 
 								temp_ray_pos += ray_step;
-
-								if (InsideSlice(temp_ray_pos) == 0) {
-									break;
-								}
 							}
 							current_ray_pos = temp_ray_pos;
 						}
@@ -152,12 +152,6 @@ Shader "VolumeRendering/Optimized/UniformEmptySpace"
 							dst.a = 1;
 							break;
 						}
-
-
-						if (InsideSlice(current_ray_pos) == 0) {
-							break;
-						}
-
 					}
 
 
