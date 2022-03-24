@@ -199,7 +199,8 @@ namespace VolumeRendering
     {
         LINEAR,
         RAMP,
-        MRDEFAULT
+        MRDEFAULT,
+        CT_BONES_8
     }
 
     enum VolumeType

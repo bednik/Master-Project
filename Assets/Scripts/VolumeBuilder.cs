@@ -21,9 +21,11 @@ public class VolumeBuilder : MonoBehaviour
     private int m_blockSize, shaderIndex;
     private Material material;
     private VolumeType volumeType;
-    private bool emptySpaceSkip;
+    private bool emptySpaceSkip, highPrecision;
     private EmptySpaceSkipMethod emptySpaceSkipMethod;
+    private Vector3 scale;
     [SerializeField] private GameObject render;
+    public reset panic;
 
     [SerializeField] InteractableToggleCollection volumeList;
     [SerializeField] InteractableToggleCollection transferFunctionList;
@@ -44,10 +46,10 @@ public class VolumeBuilder : MonoBehaviour
         return (byte)Mathf.Max(0, Mathf.Min((float)spline.Interpolate(x), 255));
     }
 
-    private Color32[] GenerateColorTable(List<AlphaTransferFunctionPoint> alphaPoints, List<ColorTransferFunctionPoint> colorPoints)
+    private Color32[] GenerateColorTable(List<AlphaTransferFunctionPoint> alphaPoints, List<ColorTransferFunctionPoint> colorPoints, bool highPrecision)
     {
         CubicSpline[] m_colorTransferFunction = new CubicSpline[3];
-        Color32[] colors = new Color32[256];
+        Color32[] colors = (highPrecision) ? new Color32[2048] : new Color32[256];
         double[] fx = new double[alphaPoints.Count];
         double[] x = new double[alphaPoints.Count];
 
@@ -79,7 +81,8 @@ public class VolumeBuilder : MonoBehaviour
         m_colorTransferFunction[1] = CubicSpline.InterpolateAkimaSorted(d, g);
         m_colorTransferFunction[2] = CubicSpline.InterpolateAkimaSorted(d, b);
 
-        for (i = 0; i < 256; i++)
+        int n = (highPrecision) ? 2048 : 256;
+        for (i = 0; i < n; i++)
         {
             colors[i] = new Color32(InterpolatedDoubleToByte(m_colorTransferFunction[0], i), InterpolatedDoubleToByte(m_colorTransferFunction[1], i), InterpolatedDoubleToByte(m_colorTransferFunction[2], i), InterpolatedDoubleToByte(m_opacityTransferFunction, i));
         }
@@ -123,7 +126,7 @@ public class VolumeBuilder : MonoBehaviour
                     new AlphaTransferFunctionPoint(255, 255)
                 };
 
-                colors = GenerateColorTable(opacityTransferFunctionPoints, colorTransferFunctionPoints);
+                colors = GenerateColorTable(opacityTransferFunctionPoints, colorTransferFunctionPoints, highPrecision);
                 
                 break;
 
@@ -148,7 +151,31 @@ public class VolumeBuilder : MonoBehaviour
                     new AlphaTransferFunctionPoint(128, 255)
                 };
 
-                colors = GenerateColorTable(opacityTransferFunctionPoints, colorTransferFunctionPoints);
+                colors = GenerateColorTable(opacityTransferFunctionPoints, colorTransferFunctionPoints, highPrecision);
+
+                break;
+
+            case TransferFunctionType.CT_BONES_8:
+                colorTransferFunctionPoints = new List<ColorTransferFunctionPoint>
+                {
+                    new ColorTransferFunctionPoint(77, 77, 255, 0),
+                    new ColorTransferFunctionPoint(77, 255, 77, 32),
+                    new ColorTransferFunctionPoint(255, 0, 0, 91),
+                    new ColorTransferFunctionPoint(255, 233, 10, 103),
+                    new ColorTransferFunctionPoint(255, 77, 77, 122),
+                    new ColorTransferFunctionPoint(255, 77, 77, 255),
+                };
+
+                opacityTransferFunctionPoints = new List<AlphaTransferFunctionPoint>
+                {
+                    new AlphaTransferFunctionPoint(0, 0),
+                    new AlphaTransferFunctionPoint(0, 72),
+                    new AlphaTransferFunctionPoint(48, 79),
+                    new AlphaTransferFunctionPoint(51, 122),
+                    new AlphaTransferFunctionPoint(51, 255)
+                };
+
+                colors = GenerateColorTable(opacityTransferFunctionPoints, colorTransferFunctionPoints, highPrecision);
 
                 break;
 
@@ -217,11 +244,76 @@ public class VolumeBuilder : MonoBehaviour
 
                         if (empty)
                         {
-                            byte alpha = transferFunction[elem + 3];
-                            byte r, g, b;
-                            r = transferFunction[elem];
-                            g = transferFunction[elem + 1];
-                            b = transferFunction[elem + 2];
+                            byte alpha = transferFunction[elem*4 + 3];
+                            // The subvolume is empty the alpha is zero
+                            empty = alpha == 0;
+                        }
+
+                        // Break out of the loop if we reach minimum minVal AND maximum maxVal
+                        if (!empty)
+                        {
+                            y = (int)max.y;
+                            z = (int)max.z;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            textureData[index] = (empty) ? (byte)0 : (byte)255;
+        }
+    }
+
+    [BurstCompile(CompileSynchronously = true)]
+    struct OccupancyHigh : IJobFor
+    {
+        [WriteOnly] public NativeArray<byte> textureData;
+
+        [ReadOnly] public NativeArray<ushort> volume;
+        [ReadOnly] public NativeArray<int> originalDims;
+        [ReadOnly] public NativeArray<int> dims;
+        [ReadOnly] public int blockSize;
+        [ReadOnly] public NativeArray<byte> transferFunction;
+
+        public void Execute(int index)
+        {
+            int temp = index;
+
+            int minZ = temp / (dims[0] * dims[1]);
+            temp -= minZ * dims[0] * dims[1];
+
+            int minY = temp / dims[0];
+            temp -= minY * dims[0];
+
+            int minX = temp;
+
+            Vector3 min = new Vector3(minX * blockSize, minY * blockSize, minZ * blockSize);
+            Vector3 max = min + new Vector3(blockSize, blockSize, blockSize);
+
+            //byte minVal = 255;
+            //byte maxVal = 0;
+            bool empty = true;
+
+            for (int z = (int)min.z; z < (int)max.z; z++)
+            {
+                if (z >= originalDims[2]) break;
+
+                for (int y = (int)min.y; y < (int)max.y; y++)
+                {
+                    if (y >= originalDims[1]) break;
+
+                    for (int x = (int)min.x; x < (int)max.x; x++)
+                    {
+                        if (x >= originalDims[0]) break;
+
+                        ushort elem = volume[x + y * originalDims[0] + z * originalDims[0] * originalDims[1]];
+
+                        //minVal = (elem < minVal) ? elem : minVal;
+                        //maxVal = (elem > maxVal) ? elem : maxVal;
+
+                        if (empty)
+                        {
+                            byte alpha = transferFunction[(elem+1023) * 4 + 3];
                             // The subvolume is empty the alpha is zero
                             empty = alpha == 0;
                         }
@@ -290,7 +382,9 @@ public class VolumeBuilder : MonoBehaviour
 
     public void Build()
     {
+        reset btn = Instantiate(panic, new Vector3(0, -0.62f, 1f), Quaternion.identity);
         GameObject gary = Instantiate(render, new Vector3(0, -0.2f, 1f), Quaternion.identity);
+        btn.render = gary;
         Transform transform = gary.GetComponent<Transform>();
         Bounds localAABB = gary.GetComponent<MeshFilter>().sharedMesh.bounds;
 
@@ -326,7 +420,8 @@ public class VolumeBuilder : MonoBehaviour
         }
 
         gary.GetComponent<MeshRenderer>().material = material;
-        transform.localScale = (new Vector3(m_volume.width, m_volume.height, m_volume.depth)) / 1000;
+        //transform.localScale = (new Vector3(m_volume.width, m_volume.height, m_volume.depth)) / 1000;
+        transform.localScale = (volumeType == VolumeType.CT) ? scale : new Vector3(m_volume.width, m_volume.height, m_volume.depth) / 1000;
         Destroy(this.transform.parent.gameObject);
     }
 
@@ -383,26 +478,41 @@ public class VolumeBuilder : MonoBehaviour
         {
             case 0:
                 volumeType = VolumeType.US;
+                highPrecision = false;
                 req = Resources.LoadAsync("VolumeTextures/US/A6/vol01");
                 break;
             case 1:
                 volumeType = VolumeType.CT;
+                scale = new Vector3(512, 512, 1469) / 1000;
+                highPrecision = false;
                 req = Resources.LoadAsync("VolumeTextures/CT/small_pig");
                 break;
             case 2:
                 volumeType = VolumeType.CT;
+                scale = new Vector3(512, 512, 1469) / 1000;
+                highPrecision = false;
                 req = Resources.LoadAsync("VolumeTextures/CT/medium_pig");
                 break;
             case 3:
-                volumeType = VolumeType.MRI;
-                req = Resources.LoadAsync("VolumeTextures/MRI/knee");
+                volumeType = VolumeType.CT;
+                scale = new Vector3(0.286f, 0.286f, 0.620f);
+                highPrecision = false;
+                req = Resources.LoadAsync("VolumeTextures/CT/thorax");
                 break;
             case 4:
                 volumeType = VolumeType.MRI;
+                highPrecision = false;
+                req = Resources.LoadAsync("VolumeTextures/MRI/knee");
+                break;
+            case 5:
+                volumeType = VolumeType.MRI;
+                highPrecision = false;
                 req = Resources.LoadAsync("VolumeTextures/MRI/abdomen");
                 break;
             default:
                 volumeType = VolumeType.CT;
+                scale = new Vector3(512, 512, 1469) / 1000;
+                highPrecision = false;
                 req = Resources.LoadAsync("VolumeTextures/CT/small_pig");
                 break;
         }

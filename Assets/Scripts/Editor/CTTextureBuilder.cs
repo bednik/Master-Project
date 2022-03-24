@@ -6,7 +6,7 @@ using System.IO;
 public class CTTextureBuilder : EditorWindow
 {
     string inputPath, outputPath;
-    int width = 154, height = 154, depth = 441;
+    int width = 512, height = 512, depth = 310;
 
     [MenuItem("Window/3D Texture Builders/Computed Tomography Texture Builder")]
     public static void ShowWindow()
@@ -16,13 +16,13 @@ public class CTTextureBuilder : EditorWindow
 
     void OnEnable()
     {
-        inputPath = "Assets/Resources/VolumeRaw/CT/";
+        inputPath = "Assets/VolumeData/CT/";
         outputPath = "Assets/Resources/VolumeTextures/CT/";
     }
 
     void GenerateTexture(string inputPath, string outputPath, int width, int height, int depth)
     {
-        if (!File.Exists(inputPath) || !inputPath.EndsWith(".raw"))
+        if (!File.Exists(inputPath) || (!inputPath.EndsWith(".raw") && !inputPath.EndsWith(".zraw")))
         {
             Debug.LogError("Error: File not found. The RAW file at " + inputPath + " does not exist");
             return;
@@ -42,27 +42,31 @@ public class CTTextureBuilder : EditorWindow
         density.filterMode = FilterMode.Bilinear;
         density.anisoLevel = 0;
 
+        int min = short.MaxValue;
+        int max = short.MinValue;
+
         // TODO: For larger textures, make a tiled version (i.e. take n rows at a time)
         using (var stream = new FileStream(inputPath, FileMode.Open))
         {
             var len = stream.Length;
 
-            if (len != textureSize)
-            {
-                Debug.LogError("Mismatch between desired texture resolution and input resolution!");
-                return;
-            }
-
             byte[] colors = new byte[textureSize];
             for (int i = 0; i < textureSize; i++)
             {
-                colors[i] = (byte)stream.ReadByte();
+                byte lower = (byte)stream.ReadByte();
+                byte higher = (byte)stream.ReadByte();
+                short val = (short)(lower + (higher << 8));
+                colors[i] = (byte)((val + 1024)/16);
+                min = (val < min) ? val : min;
+                max = (val > max) ? val : max;
             }
 
             density.SetPixelData(colors, 0);
             density.Apply();
         }
-        
+
+        Debug.Log(min);
+        Debug.Log(max);
 
         AssetDatabase.CreateAsset(density, outputPath);
         AssetDatabase.SaveAssets();
