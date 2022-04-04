@@ -14,8 +14,7 @@ Shader "VolumeRendering/Basic/Basic"
 
 	SubShader
 	{
-		// Setting the renderqueue to "Transparent" makes it prettier in the editor
-		//Tags { "Queue" = "Transparent" "DisableBatching" = "True"}
+		Tags { "Queue" = "Transparent"}
 		Blend SrcAlpha OneMinusSrcAlpha
 
 		Pass

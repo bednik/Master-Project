@@ -18,6 +18,7 @@ Shader "VolumeRendering/Optimized/OccupancyMap"
 			// Setting the renderqueue to "Transparent" makes it prettier in the editor
 			Tags { "Queue" = "Transparent" "DisableBatching" = "True"}
 			Blend SrcAlpha OneMinusSrcAlpha
+			LOD 0
 
 			Pass
 			{
@@ -25,7 +26,8 @@ Shader "VolumeRendering/Optimized/OccupancyMap"
 				#pragma vertex vert
 				#pragma fragment frag
 
-				sampler3D _Volume, _OccupancyMap;
+				sampler3D _Volume;
+				Texture3D _OccupancyMap;
 				sampler2D _Transfer;
 				half _ERT;
 				float3 _bbMin, _bbMax;
@@ -100,7 +102,6 @@ Shader "VolumeRendering/Optimized/OccupancyMap"
 					o.vertex = UnityObjectToClipPos(v.pos);
 					o.uv = v.uv;
 					o.t_0 = v.pos.xyz + 0.5;
-					//o.world = mul(unity_ObjectToWorld, o.t_0).xyz; // REVISIT: May be a problem
 					o.world = mul(unity_ObjectToWorld, v.pos).xyz;
 					o.local = v.pos.xyz;
 					return o;
@@ -120,6 +121,7 @@ Shader "VolumeRendering/Optimized/OccupancyMap"
 
 					// Calculate amount of sample points and step length (with direction)
 					int n = int(ceil(float(max3(_VolumeDims)) * ray.length * _Quality));
+					//int n = 256;
 					float3 step_volume = ray.dir * ray.length / (float(n) - 1.0f);
 
 					// This piece of code from Deakin makes performance smoother in some cases.
@@ -149,17 +151,18 @@ Shader "VolumeRendering/Optimized/OccupancyMap"
                     [loop]
                     for (int i = 0; i < n; i) {
 						float3 u = volume_to_occupancy_u * currentRayPos;
-						int3 u_int = int3(floor(u));
+						int3 u_int = clamp(int3(floor(u)), int3(0, 0, 0), _OccupancyDims - 1);
 						
 						if (empty && any(u_int != last_u_int)) {
-							empty = tex3D(_OccupancyMap, u/_OccupancyDims) <= 0;
+							float val = _OccupancyMap.Load(int4(u_int, 0));
+							empty = val <= 0;
 							last_u_int = (empty) ? last_u_int : u_int;
-							i = (empty) ? i + delta_i(delta_i3(step_occupancy, u_int, step_occupancy_inv)) : int(max(i + i_reverse, i_min));
+							i = (empty) ? i + delta_i(delta_i3(step_occupancy, u, step_occupancy_inv)) : int(max(i + i_reverse, i_min));
 							currentRayPos = findSamplePoint(i, step_volume, ray.origin);
 						} else {
-							float density = tex3D(_Volume, currentRayPos);
-							float4 src = tex2D(_Transfer, density);							
-							empty = src.a == 0;
+							float density = tex3Dlod(_Volume, float4(currentRayPos, 0));
+							float4 src = tex2Dlod(_Transfer, float4(density, 0, 0, 0));							
+							empty = src.a <= 0;
 							if (!empty) {
 								last_u_int = u_int;
 
@@ -175,6 +178,7 @@ Shader "VolumeRendering/Optimized/OccupancyMap"
 							i++;
 							i_min = i;
 							currentRayPos += step_volume;
+							//currentRayPos = findSamplePoint(i, step_volume, ray.origin);
 						}
 					}
 

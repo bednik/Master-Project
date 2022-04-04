@@ -183,7 +183,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 83d9acc7968244a8886f3af591305bcb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  activeProfile: {fileID: 11400000, guid: 31a611a779d3499e8e35f1a2018ca841, type: 2}
+  activeProfile: {fileID: 11400000, guid: 7e7c962b9eb9dfa44993d5b2f2576752, type: 2}
 --- !u!4 &781356597
 Transform:
   m_ObjectHideFlags: 0
@@ -329,7 +329,7 @@ Camera:
   m_GameObject: {fileID: 1445266764}
   m_Enabled: 1
   serializedVersion: 2
-  m_ClearFlags: 1
+  m_ClearFlags: 2
   m_BackGroundColor: {r: 0, g: 0, b: 0, a: 1}
   m_projectionMatrixMode: 1
   m_GateFitMode: 2
@@ -486,6 +486,22 @@ PrefabInstance:
   m_Modification:
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 3478064198492036115, guid: 9a45c35c4781ae54d81f31251f7d3be4, type: 3}
+      propertyPath: m_RootOrder
+      value: 3
+      objectReference: {fileID: 0}
+    - target: {fileID: 4516058337928569041, guid: 9a45c35c4781ae54d81f31251f7d3be4, type: 3}
+      propertyPath: cube
+      value: 
+      objectReference: {fileID: 0}
+    - target: {fileID: 4516058337928569041, guid: 9a45c35c4781ae54d81f31251f7d3be4, type: 3}
+      propertyPath: panic
+      value: 
+      objectReference: {fileID: 8850217121647599748, guid: be5a81213bcc0c04e989e8b3de19aa51, type: 3}
+    - target: {fileID: 4516058338521003020, guid: 9a45c35c4781ae54d81f31251f7d3be4, type: 3}
+      propertyPath: currentIndex
+      value: 2
+      objectReference: {fileID: 0}
     - target: {fileID: 4516058339171643888, guid: 9a45c35c4781ae54d81f31251f7d3be4, type: 3}
       propertyPath: m_Name
       value: UI
