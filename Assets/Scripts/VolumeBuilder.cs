@@ -25,10 +25,13 @@ public class VolumeBuilder : MonoBehaviour
     private EmptySpaceSkipMethod emptySpaceSkipMethod;
     private Vector3 scale;
     [SerializeField] private GameObject render;
-    public reset panic;
-    private bool destroyMe = false;
+    public Reset panic;
+    private bool doneOcc = false;
+    private bool doneCheb = false;
+    private int highQuality = 0;
 
     [SerializeField] InteractableToggleCollection volumeList;
+    [SerializeField] InteractableToggleCollection qualityToggle;
     [SerializeField] InteractableToggleCollection transferFunctionList;
     [SerializeField] InteractableToggleCollection shaderList;
     [SerializeField] SimpleSliderBehaviour ERTSlider;
@@ -352,7 +355,7 @@ public class VolumeBuilder : MonoBehaviour
         Texture3D subdivision = new Texture3D(dims[0], dims[1], dims[2], TextureFormat.R8, false)
         {
             wrapMode = TextureWrapMode.Clamp,
-            filterMode = FilterMode.Bilinear,
+            filterMode = FilterMode.Point,
             anisoLevel = 0
         };
         subdivision.Apply();
@@ -375,8 +378,118 @@ public class VolumeBuilder : MonoBehaviour
         RenderTexture.active = null;
         res.Release();
 
-        material.SetTexture("_OccupancyMap", subdivision);
-        destroyMe = true;
+        if (shaderIndex != 6)
+        {
+            material.SetTexture("_OccupancyMap", subdivision);
+        }
+        else
+        {
+            material.SetTexture("_DistanceMap", subdivision);
+        }
+        
+        doneOcc = true;
+
+        yield return null;
+    }
+
+    IEnumerator Chebyshev()
+    {
+        while (!doneOcc)
+        {
+            yield return null;
+        }
+
+        Texture2D byteToFloat = new Texture2D(256, 1, TextureFormat.R8, false) 
+        {
+            wrapMode = TextureWrapMode.Clamp,
+            filterMode = FilterMode.Point,
+            anisoLevel = 0
+        };
+
+        byte[] bytes = new byte[256];
+        for (int i = 0; i < 256; i++)
+        {
+            bytes[i] = (byte)i;
+        }
+        byteToFloat.SetPixelData<byte>(bytes, 0);
+        byteToFloat.Apply();
+
+        ComputeShader cs = (ComputeShader)Resources.Load("ComputeShaders/Chebyshev");
+        int[] dims = new int[3] { Mathf.CeilToInt((float)m_volume.width / m_blockSize), Mathf.CeilToInt((float)m_volume.height / m_blockSize), Mathf.CeilToInt((float)m_volume.depth / m_blockSize) };
+        RenderTexture outMap = new RenderTexture(dims[0], dims[1], 0, RenderTextureFormat.R8)
+        {
+            dimension = UnityEngine.Rendering.TextureDimension.Tex3D,
+            volumeDepth = dims[2],
+            enableRandomWrite = true,
+            filterMode = FilterMode.Point
+        };
+        outMap.Create();
+
+        Texture3D storeTex = new Texture3D(dims[0], dims[1], dims[2], TextureFormat.R8, false) 
+        {
+            wrapMode = TextureWrapMode.Clamp,
+            filterMode = FilterMode.Point,
+            anisoLevel = 0
+        };
+        storeTex.Apply();
+
+        //////// TRANSFORM 1 ////////
+
+        int kernelHandle = cs.FindKernel("Trans1");
+        cs.SetTexture(kernelHandle, "InMap", (Texture3D)material.GetTexture("_DistanceMap"), 0);
+        cs.SetTexture(kernelHandle, "OutMap", outMap, 0);
+        cs.SetTexture(kernelHandle, "ByteToFloat", byteToFloat, 0);
+        cs.Dispatch(kernelHandle, 1, Mathf.CeilToInt((float)dims[1] / 8), Mathf.CeilToInt((float)dims[2] / 8));
+        yield return null;
+
+        GL.Flush();
+
+        // Copy to normal texture, release rendertexture
+        RenderTexture.active = outMap;
+        Graphics.CopyTexture(outMap, storeTex);
+        yield return null;
+        RenderTexture.active = null;
+        material.SetTexture("_DistanceMap", storeTex);
+
+        //////// TRANSFORM 2 ////////
+        kernelHandle = cs.FindKernel("Trans2");
+        cs.SetTexture(kernelHandle, "InMap", (Texture3D)material.GetTexture("_DistanceMap"));
+        cs.SetTexture(kernelHandle, "OutMap", outMap, 0);
+        cs.SetTexture(kernelHandle, "ByteToFloat", byteToFloat, 0);
+        cs.Dispatch(kernelHandle, Mathf.CeilToInt((float)dims[0] / 8), 1, Mathf.CeilToInt((float)dims[2] / 8));
+        yield return null;
+
+        GL.Flush();
+
+        // Copy to normal texture, release rendertexture
+        RenderTexture.active = outMap;
+        Graphics.CopyTexture(outMap, storeTex);
+        yield return null;
+        RenderTexture.active = null;
+
+        material.SetTexture("_DistanceMap", storeTex);
+
+        //////// TRANSFORM 3 ////////
+
+        kernelHandle = cs.FindKernel("Trans3");
+        cs.SetTexture(kernelHandle, "InMap", (Texture3D)material.GetTexture("_DistanceMap"));
+        cs.SetTexture(kernelHandle, "OutMap", outMap, 0);
+        cs.SetTexture(kernelHandle, "ByteToFloat", byteToFloat, 0);
+        cs.Dispatch(kernelHandle, Mathf.CeilToInt((float)dims[0] / 8), Mathf.CeilToInt((float)dims[1] / 8), 1);
+        yield return null;
+
+        GL.Flush();
+
+        // Copy to normal texture, release rendertexture
+        RenderTexture.active = outMap;
+        Graphics.CopyTexture(outMap, storeTex);
+        yield return null;
+        RenderTexture.active = null;
+        outMap.Release();
+
+
+        material.SetTexture("_DistanceMap", storeTex);
+        doneCheb = true;
 
         yield return null;
     }
@@ -387,10 +500,16 @@ public class VolumeBuilder : MonoBehaviour
 
     private IEnumerator TimedDestruction()
     {
-        while (!destroyMe)
+        while (!doneOcc || !doneCheb)
         {
             yield return null;
         }
+        Reset btn = Instantiate(panic, new Vector3(0, -0.62f, 2f), Quaternion.identity);
+        GameObject gary = Instantiate(render, new Vector3(0, -0.2f, 2.5f), Quaternion.identity);
+        btn.render = gary;
+        Transform transform_g = gary.GetComponent<Transform>();
+        gary.GetComponent<MeshRenderer>().material = material;
+        transform_g.localScale = (volumeType == VolumeType.CT) ? scale : new Vector3(m_volume.width, m_volume.height, m_volume.depth) / 1000;
         Destroy(transform.parent.gameObject);
     }
 
@@ -399,22 +518,27 @@ public class VolumeBuilder : MonoBehaviour
         material.SetTexture("_Transfer", transferFunction);
         material.SetTexture("_Volume", m_volume);
         material.SetFloat("_ERT", m_ERT);
+        material.SetInt("_HighQuality", highQuality);
 
         if (emptySpaceSkip)
         {
             switch (emptySpaceSkipMethod)
             {
                 case EmptySpaceSkipMethod.UNIFORM:
-                    //material.SetTexture("_EmptySpaceSkipStructure", UniformSubdivision(material));
+                    StartCoroutine(UniformSubdivision(material));
+                    doneCheb = true;
                     material.SetInt("_BlockSize", m_blockSize);
                     material.SetVector("_OccupancyDims", new Vector3(Mathf.CeilToInt((float)m_volume.width / m_blockSize), Mathf.CeilToInt((float)m_volume.height / m_blockSize), Mathf.CeilToInt((float)m_volume.depth / m_blockSize)));
                     break;
                 case EmptySpaceSkipMethod.OCCUPANCY:
                     StartCoroutine(UniformSubdivision(material));
+                    doneCheb = true;
                     material.SetInt("_BlockSize", m_blockSize);
                     material.SetVector("_OccupancyDims", new Vector3(Mathf.CeilToInt((float)m_volume.width / m_blockSize), Mathf.CeilToInt((float)m_volume.height / m_blockSize), Mathf.CeilToInt((float)m_volume.depth / m_blockSize)));
                     break;
                 case EmptySpaceSkipMethod.CHEBYSHEV:
+                    StartCoroutine(UniformSubdivision(material));
+                    StartCoroutine(Chebyshev());
                     break;
                 case EmptySpaceSkipMethod.SPARSELEAP:
                     break;
@@ -422,15 +546,13 @@ public class VolumeBuilder : MonoBehaviour
                     break;
             }
         }
+        else
+        {
+            doneOcc = true;
+            doneCheb = true;
+        }
         material.SetVector("_VolumeDims", new Vector3(m_volume.width, m_volume.height, m_volume.depth));
-
-        reset btn = Instantiate(panic, new Vector3(0, -0.62f, 1f), Quaternion.identity);
-        GameObject gary = Instantiate(render, new Vector3(0, -0.2f, 1f), Quaternion.identity);
-        btn.render = gary;
-        Transform transform = gary.GetComponent<Transform>();
-        gary.GetComponent<MeshRenderer>().material = material;
-        transform.localScale = (volumeType == VolumeType.CT) ? scale : new Vector3(m_volume.width, m_volume.height, m_volume.depth) / 1000;
-        StartCoroutine("TimedDestruction");
+        StartCoroutine(TimedDestruction());
     }
 
     public void PickVolumeEvent()
@@ -468,6 +590,11 @@ public class VolumeBuilder : MonoBehaviour
         m_ERT = ERTSlider.CurrentValue;
     }
 
+    public void UpdateQuality()
+    {
+        highQuality = qualityToggle.CurrentIndex;
+    }
+
     public void UpdateBlockSize()
     {
         m_blockSize = ESSSlider.CurrentValue;
@@ -475,7 +602,6 @@ public class VolumeBuilder : MonoBehaviour
 
     public void PickTransferFunctionEvent()
     {
-        Debug.Log(((TransferFunctionType)transferFunctionList.CurrentIndex).ToString());
         transferFunction = GenerateTransferFunction((TransferFunctionType)transferFunctionList.CurrentIndex);
     }
 

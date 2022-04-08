@@ -1,18 +1,17 @@
+// Deakin and Knackstead: https://link.springer.com/article/10.1007/s41095-019-0155-y
 Shader "VolumeRendering/Optimized/Chebyshev"
 {
 	Properties
 	{
 		_Volume("Volume", 3D) = "" {}
 		_Transfer("Transfer function", 2D) = "" {}
-		_EmptySpaceSkipStructure("Texture containing hints as to whether said space is empty", 3D) = "" {}
+		_DistanceMap("Texture containing hints as to whether said space is empty", 3D) = "" {}
 		_BlockSize("Dimension of each empty-space node", Int) = 8
 		_ERT("Stop the ray after this amount of time", Range(0.0, 1.0)) = 0.95
-		_SliceMin("Slice min", Vector) = (-0.5, -0.5, -0.5, 1.0)
-		_SliceMax("Slice max", Vector) = (0.5, 0.5, 0.5, 1.0)
-		_bbMin("Volume's minimum coord of bounding box", Vector) = (-0.5, -0.5, -0.5, 1.0)
-		_bbMax("Volume's maximum coord of bounding box", Vector) = (0.5, 0.5, 0.5, 1.0)
 		_VolumeDims("Dimensions of the volume", Vector) = (154, 154, 441)
+        _OccupancyDims("Dimensions of the occupancy structure", Vector) = (10, 10, 28)
 		_Quality("Quality factor for amount of sample points", Range(1.0, 5.0)) = 1.0
+		_HighQuality("Hard-coded 256 points or based on dimension", Range(0, 1)) = 1
 	}
 
 		SubShader
@@ -20,6 +19,7 @@ Shader "VolumeRendering/Optimized/Chebyshev"
 			// Setting the renderqueue to "Transparent" makes it prettier in the editor
 			Tags { "Queue" = "Transparent" "DisableBatching" = "True"}
 			Blend SrcAlpha OneMinusSrcAlpha
+			LOD 0
 
 			Pass
 			{
@@ -27,20 +27,20 @@ Shader "VolumeRendering/Optimized/Chebyshev"
 				#pragma vertex vert
 				#pragma fragment frag
 
-				sampler3D _Volume, _EmptySpaceSkipStructure;
+				sampler3D _Volume;
+				Texture3D _DistanceMap;
 				sampler2D _Transfer;
-				half _Intensity, _ThresholdMin, _ThresholdMax, _ERT;
-				half3 _SliceMin, _SliceMax;
+				half _ERT;
 				float3 _bbMin, _bbMax;
 				half _BlockSize;
-				half3 _VolumeDims;
+				int3 _VolumeDims, _OccupancyDims;
 				half _Quality;
-
-				#define SAMPLEPOINTS 256
+				int _HighQuality;
 
 				struct Ray {
 					float3 origin;
 					float3 dir;
+					float length;
 				};
 
 				struct vertexData
@@ -55,6 +55,7 @@ Shader "VolumeRendering/Optimized/Chebyshev"
 					float2 uv : TEXCOORD0;
 					float3 world : TEXCOORD1;
 					float3 local : TEXCOORD2;
+					float3 t_0 : TEXCOORD3;
 				};
 
 				// Adapted from https://stackoverflow.com/questions/28006184/get-component-wise-maximum-of-vector-in-glsl
@@ -66,34 +67,40 @@ Shader "VolumeRendering/Optimized/Chebyshev"
 					return min(min(v.x, v.y), v.z);
 				}
 
-				// Returns 1 if point p is within the specified slice boundaries, 1 otherwise
-				float InsideSlice(float3 p) {
-					return step(_SliceMin.x, p.x) * step(_SliceMin.y, p.y) * step(_SliceMin.z, p.z) * step(p.x, _SliceMax.x) * step(p.y, _SliceMax.y) * step(p.z, _SliceMax.z);
+				// From Lachlan Deakin's code (https://github.com/LDeakin/VkVolume/blob/master/shaders/volume_render.frag)
+				float3 ray_caster_get_back(float3 front_intersection, float3 dir) {
+					// Use AABB ray-box intersection (simplified due to unit cube [0-1]) to get intersection with back
+					float3 dir_inv = 1.0f / dir;
+					float3 tMin = -front_intersection * dir_inv;
+					float3 tMax = (1.0f - front_intersection) * dir_inv;
+					float3 t1 = min(tMin, tMax);
+					float3 t2 = max(tMin, tMax);
+					float tNear = max(max(t1.x, t1.y), t1.z);
+					float tFar = min(min(t2.x, t2.y), t2.z);
+
+					// Return the back intersection
+					return tFar * dir + front_intersection;
 				}
 
-				// Returns 1 if texture value is within the specified thresholds, 0 otherwise
-				float InsideThreshold(float val) {
-					return step(_ThresholdMin, val) * step(val, _ThresholdMax);
+				// Equation 4 (Deakin and Knackstead)
+				float3 findSamplePoint(int i, float3 delta_t, float3 t_entry) {
+					return mad(i, delta_t, t_entry); 
 				}
 
-				// Adapted from intersectAABB in https://gist.github.com/DomNomNom/46bb1ce47f68d255fd5d
-				void intersectAABB(float3 origin, float3 rayDir, out float3 entrance, out float3 exit) {
-					float3 invRayDir = 1 / rayDir;
-					float3 intersectionMin = (_bbMin - origin) * invRayDir;
-					float3 intersectionMax = (_bbMax - origin) * invRayDir;
-
-					entrance = min(intersectionMin, intersectionMax);
-					exit = max(intersectionMin, intersectionMax);
-				};
-
-				// t_i = t_entry + i * delta_t
-				float3 findSamplingPoint(int i, float3 delta_t, float3 t) {
-					return mad(i, delta_t, t); 
+				// Equation 8 (Deakin and Knackstead)
+				int3 delta_i3_old(float3 delta_u, float3 u, float3 delta_u_inv) {
+					return ceil(((delta_u > 0) + floor(u) - u) * delta_u_inv);
 				}
 
-				int delta_i(float3 delta_u, float3 u) {
-					return ceil(((delta_u > 0) + floor(u) - u) / delta_u);
+				// Equation 14 (Deakin and Knackstead)
+				int3 delta_i3(float3 delta_u, float3 u, float3 delta_u_inv, uint dist) {
+					return ceil(((-delta_u > 0) + sign(delta_u) * float(dist) + floor(u) - u) * delta_u_inv);
 				}
+
+                // Equation 9 (Deakin and Knackstead)
+                int delta_i(int3 delta_i3) {
+                    return max(min3(delta_i3), 1);
+                }
 
 				// Vertex kernel //
 				v2f vert(vertexData v)
@@ -101,54 +108,74 @@ Shader "VolumeRendering/Optimized/Chebyshev"
 					v2f o;
 					o.vertex = UnityObjectToClipPos(v.pos);
 					o.uv = v.uv;
+					o.t_0 = v.pos.xyz + 0.5;
 					o.world = mul(unity_ObjectToWorld, v.pos).xyz;
 					o.local = v.pos.xyz;
 					return o;
 				}
 
 				// Fragment kernel //
-				fixed4 frag(v2f i) : SV_Target
+				// This fragment shader is heavily inspired by Lachlan Deakin's shader at https://github.com/LDeakin/VkVolume/blob/master/shaders/volume_render.frag
+				// Modifications have been made to make it work with my software architecture, as well as follow my own style
+				fixed4 frag(v2f vdata) : SV_Target
 				{
-					Ray ray;
-					ray.origin = i.local;
+					// Determine ray direction and length
+					//discard;
+                    Ray ray;
+					ray.origin = vdata.t_0;
+					ray.dir = normalize(mul(unity_WorldToObject, vdata.world - _WorldSpaceCameraPos));
+					float3 ray_exit = ray_caster_get_back(vdata.t_0, ray.dir);
+  					ray.length = length(vdata.t_0 - ray_exit);
+					if (ray.length == 0) {
+						discard;
+					}
 
-					float3 dir = (i.world - _WorldSpaceCameraPos);
-					ray.dir = normalize(mul(unity_WorldToObject, dir));
+					// Calculate amount of sample points and step length (with direction)
+					int n = (_HighQuality == 1) ? int(ceil(float(max3(_VolumeDims)) * ray.length * _Quality)) : 256;
+					float3 step_volume = ray.dir * ray.length / (float(n) - 1.0f);
 
-					float3 entrance, exit;
-					intersectAABB(ray.origin, ray.dir, entrance, exit);
+					// This piece of code from Deakin makes performance smoother in some cases.
+					// Deakin's words:
+						// This test fixes a performance regression if view is oriented with edge/s of the volume
+  						// perhaps due to precision issues with the bounding box intersection
+					float3 early_exit_test = ray.origin + step_volume;
+					if (any(early_exit_test <= 0) || any(early_exit_test >= 1)) {
+						return fixed4(0, 0, 0, 0);
+					}
 
-					int n = ceil(max3(_VolumeDims) * length(exit - entrance) * _Quality);
-					float3 delta_t = (exit - entrance) / (n - 1);
+					// ESS values
+					float3 volume_to_occupancy_u = _VolumeDims / _BlockSize;
+					float3 step_occupancy = step_volume * volume_to_occupancy_u;
+					float3 step_occupancy_inv = 1 / step_occupancy;
+					int i_min = 0;
+					int3 last_u_int = int3(0, 0, 0);
+					int i_reverse = -int(ceil(_Quality));
 
-					// Set up output and shader pass values
-					float oneMinusAlpha = 0;
-					float4 dst = float4(0, 0, 0, 0);
-					float3 current_ray_pos = entrance;
-					float3 temp_ray_pos = current_ray_pos;
+					// Final setup
+					float3 currentRayPos = ray.origin;
+					half oneMinusAlpha = 1;
+					fixed4 dst = fixed4(0, 0, 0, 0);
 
+					bool empty = false;
 
-
-					/*
-					[loop]
-					for (int block = 0; block < N; block += _BlockSize) {
-						if (InsideSlice(current_ray_pos) == 0) {
-							break;
-						}
-						float val = tex3D(_EmptySpaceSkipStructure, current_ray_pos + 0.5f);
-						if (val != 0.0) {
-							temp_ray_pos = current_ray_pos;
-							[loop]
-							for (int iter = block; iter < block + _BlockSize; iter++) {
-
-								if (InsideSlice(temp_ray_pos) == 0) {
-									break;
-								}
-								// Sample the texture and set the value to 0 if it is outside the slice or not within the value thresholds
-								float density = tex3D(_Volume, temp_ray_pos + 0.5f);
-
-								// Two extra texture memory accesses. Can be merged by using a 16-bit 2-channel texture (or 32 bit for color)
-								float4 src = tex2D(_Transfer, density);
+                    [loop]
+                    for (int i = 0; i < n; i) {
+						float3 u = volume_to_occupancy_u * currentRayPos;
+						int3 u_int = int3(floor(u));
+						
+						if (empty && any(u_int != last_u_int)) {
+							float distance = _DistanceMap.Load(int4(u_int, 0));
+							uint distance_u = uint(floor(distance * 255));
+							empty = distance > 0;
+							last_u_int = (empty) ? last_u_int : u_int;
+							i = (empty) ? i + delta_i(delta_i3(step_occupancy, u, step_occupancy_inv, distance_u)) : int(max(i + i_reverse, i_min));
+							currentRayPos = findSamplePoint(i, step_volume, ray.origin);
+						} else {
+							float density = tex3Dlod(_Volume, float4(currentRayPos, 0));
+							float4 src = tex2Dlod(_Transfer, float4(density, 0, 0, 0));							
+							empty = src.a <= 0;
+							if (!empty) {
+								last_u_int = u_int;
 
 								oneMinusAlpha = 1 - dst.a;
 								dst.a = mad(src.a, oneMinusAlpha, dst.a);
@@ -158,21 +185,12 @@ Shader "VolumeRendering/Optimized/Chebyshev"
 									dst.a = 1;
 									break;
 								}
-
-								temp_ray_pos += ray_step;
 							}
-							current_ray_pos = temp_ray_pos;
+							i++;
+							i_min = i;
+							currentRayPos += step_volume;
 						}
-						else {
-							current_ray_pos = mad(_BlockSize, ray_step, current_ray_pos);
-						}
-
-						if (dst.a >= _ERT) {
-							dst.a = 1;
-							break;
-						}
-					}*/
-
+					}
 
 					dst = saturate(dst);
 

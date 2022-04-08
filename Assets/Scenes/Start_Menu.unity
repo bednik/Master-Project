@@ -98,7 +98,7 @@ LightmapSettings:
     m_TrainingDataDestination: TrainingData
     m_LightProbeSampleCountMultiplier: 4
   m_LightingDataAsset: {fileID: 0}
-  m_LightingSettings: {fileID: 0}
+  m_LightingSettings: {fileID: 4890085278179872738, guid: a38080b93997c2f4087549e49e12858c, type: 2}
 --- !u!196 &4
 NavMeshSettings:
   serializedVersion: 2
@@ -493,11 +493,15 @@ PrefabInstance:
     - target: {fileID: 4516058337928569041, guid: 9a45c35c4781ae54d81f31251f7d3be4, type: 3}
       propertyPath: cube
       value: 
-      objectReference: {fileID: 0}
+      objectReference: {fileID: 6521052283403088474, guid: c504e61aeec228c4cb4e8eb7a78943c1, type: 3}
     - target: {fileID: 4516058337928569041, guid: 9a45c35c4781ae54d81f31251f7d3be4, type: 3}
       propertyPath: panic
       value: 
       objectReference: {fileID: 8850217121647599748, guid: be5a81213bcc0c04e989e8b3de19aa51, type: 3}
+    - target: {fileID: 4516058337928569041, guid: 9a45c35c4781ae54d81f31251f7d3be4, type: 3}
+      propertyPath: qualityToggle
+      value: 
+      objectReference: {fileID: 4516058339644884017}
     - target: {fileID: 4516058338521003020, guid: 9a45c35c4781ae54d81f31251f7d3be4, type: 3}
       propertyPath: currentIndex
       value: 2
@@ -550,5 +554,24 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 4941471761397046108, guid: 9a45c35c4781ae54d81f31251f7d3be4, type: 3}
+      propertyPath: currentIndex
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4941471761397046108, guid: 9a45c35c4781ae54d81f31251f7d3be4, type: 3}
+      propertyPath: OnSelectionEvents.m_PersistentCalls.m_Calls.Array.data[0].m_MethodName
+      value: UpdateQuality
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 9a45c35c4781ae54d81f31251f7d3be4, type: 3}
+--- !u!114 &4516058339644884017 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 4941471761397046108, guid: 9a45c35c4781ae54d81f31251f7d3be4, type: 3}
+  m_PrefabInstance: {fileID: 4516058339644884016}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8adeb8b21c6d120408d0aea984f6b26d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 

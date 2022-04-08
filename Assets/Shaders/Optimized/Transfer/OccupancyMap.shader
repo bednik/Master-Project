@@ -11,6 +11,7 @@ Shader "VolumeRendering/Optimized/OccupancyMap"
 		_VolumeDims("Dimensions of the volume", Vector) = (154, 154, 441)
         _OccupancyDims("Dimensions of the occupancy structure", Vector) = (10, 10, 28)
 		_Quality("Quality factor for amount of sample points", Range(1.0, 5.0)) = 1.0
+		_HighQuality("Hard-coded 256 points or based on dimension", Range(0, 1)) = 1
 	}
 
 		SubShader
@@ -34,6 +35,7 @@ Shader "VolumeRendering/Optimized/OccupancyMap"
 				half _BlockSize;
 				int3 _VolumeDims, _OccupancyDims;
 				half _Quality;
+				int _HighQuality;
 
 				struct Ray {
 					float3 origin;
@@ -120,8 +122,7 @@ Shader "VolumeRendering/Optimized/OccupancyMap"
   					ray.length = length(vdata.t_0 - ray_exit);
 
 					// Calculate amount of sample points and step length (with direction)
-					int n = int(ceil(float(max3(_VolumeDims)) * ray.length * _Quality));
-					//int n = 256;
+					int n = (_HighQuality == 1) ? int(ceil(float(max3(_VolumeDims)) * ray.length * _Quality)) : 256;
 					float3 step_volume = ray.dir * ray.length / (float(n) - 1.0f);
 
 					// This piece of code from Deakin makes performance smoother in some cases.
@@ -151,11 +152,11 @@ Shader "VolumeRendering/Optimized/OccupancyMap"
                     [loop]
                     for (int i = 0; i < n; i) {
 						float3 u = volume_to_occupancy_u * currentRayPos;
-						int3 u_int = clamp(int3(floor(u)), int3(0, 0, 0), _OccupancyDims - 1);
+						int3 u_int = int3(floor(u));
 						
 						if (empty && any(u_int != last_u_int)) {
 							float val = _OccupancyMap.Load(int4(u_int, 0));
-							empty = val <= 0;
+							empty = val > 0;
 							last_u_int = (empty) ? last_u_int : u_int;
 							i = (empty) ? i + delta_i(delta_i3(step_occupancy, u, step_occupancy_inv)) : int(max(i + i_reverse, i_min));
 							currentRayPos = findSamplePoint(i, step_volume, ray.origin);
@@ -178,7 +179,6 @@ Shader "VolumeRendering/Optimized/OccupancyMap"
 							i++;
 							i_min = i;
 							currentRayPos += step_volume;
-							//currentRayPos = findSamplePoint(i, step_volume, ray.origin);
 						}
 					}
 
