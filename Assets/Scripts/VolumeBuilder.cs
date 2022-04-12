@@ -519,6 +519,7 @@ public class VolumeBuilder : MonoBehaviour
         material.SetTexture("_Volume", m_volume);
         material.SetFloat("_ERT", m_ERT);
         material.SetInt("_HighQuality", highQuality);
+        material.SetInt("_BlockSize", m_blockSize);
 
         if (emptySpaceSkip)
         {
@@ -527,13 +528,11 @@ public class VolumeBuilder : MonoBehaviour
                 case EmptySpaceSkipMethod.UNIFORM:
                     StartCoroutine(UniformSubdivision(material));
                     doneCheb = true;
-                    material.SetInt("_BlockSize", m_blockSize);
                     material.SetVector("_OccupancyDims", new Vector3(Mathf.CeilToInt((float)m_volume.width / m_blockSize), Mathf.CeilToInt((float)m_volume.height / m_blockSize), Mathf.CeilToInt((float)m_volume.depth / m_blockSize)));
                     break;
                 case EmptySpaceSkipMethod.OCCUPANCY:
                     StartCoroutine(UniformSubdivision(material));
                     doneCheb = true;
-                    material.SetInt("_BlockSize", m_blockSize);
                     material.SetVector("_OccupancyDims", new Vector3(Mathf.CeilToInt((float)m_volume.width / m_blockSize), Mathf.CeilToInt((float)m_volume.height / m_blockSize), Mathf.CeilToInt((float)m_volume.depth / m_blockSize)));
                     break;
                 case EmptySpaceSkipMethod.CHEBYSHEV:
