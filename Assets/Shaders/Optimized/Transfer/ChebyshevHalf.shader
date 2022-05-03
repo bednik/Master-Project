@@ -1,11 +1,11 @@
 // Deakin and Knackstead: https://link.springer.com/article/10.1007/s41095-019-0155-y
-Shader "VolumeRendering/Optimized/OccupancyMap"
+Shader "VolumeRendering/Optimized/ChebyshevHalf"
 {
 	Properties
 	{
 		_Volume("Volume", 3D) = "" {}
 		_Transfer("Transfer function", 2D) = "" {}
-		_OccupancyMap("Texture containing hints as to whether said space is empty", 3D) = "" {}
+		_DistanceMap("Texture containing hints as to whether said space is empty", 3D) = "" {}
 		_BlockSize("Dimension of each empty-space node", Int) = 8
 		_ERT("Stop the ray after this amount of time", Range(0.0, 1.0)) = 0.95
 		_VolumeDims("Dimensions of the volume", Vector) = (154, 154, 441)
@@ -16,10 +16,10 @@ Shader "VolumeRendering/Optimized/OccupancyMap"
 
 		SubShader
 		{
-			// Setting the renderqueue to "Transparent" makes it prettier in the editor
 			Tags { "Queue" = "Transparent" "DisableBatching" = "True"}
 			Blend SrcAlpha OneMinusSrcAlpha
 			LOD 0
+			//Conservative True
 
 			Pass
 			{
@@ -28,13 +28,12 @@ Shader "VolumeRendering/Optimized/OccupancyMap"
 				#pragma fragment frag
 
 				sampler3D _Volume;
-				Texture3D _OccupancyMap;
+				Texture3D _DistanceMap;
 				sampler2D _Transfer;
-				half _ERT;
-				float3 _bbMin, _bbMax;
-				half _BlockSize;
-				int3 _VolumeDims, _OccupancyDims;
-				half _Quality;
+				min16float _ERT;
+				min16float _BlockSize;
+				min16float3 _VolumeDims, _OccupancyDims;
+				min16float _Quality;
 				int _HighQuality;
 
 				struct Ray {
@@ -59,11 +58,11 @@ Shader "VolumeRendering/Optimized/OccupancyMap"
 				};
 
 				// Adapted from https://stackoverflow.com/questions/28006184/get-component-wise-maximum-of-vector-in-glsl
-				float max3(float3 v) {
+				min16uint max3(min16float3 v) {
 					return max(max(v.x, v.y), v.z);
 				}
 
-				float min3(float3 v) {
+				min16int min3(min16int3 v) {
 					return min(min(v.x, v.y), v.z);
 				}
 
@@ -82,19 +81,14 @@ Shader "VolumeRendering/Optimized/OccupancyMap"
 					return tFar * dir + front_intersection;
 				}
 
-				// Equation 4 (Deakin and Knackstead)
-				float3 findSamplePoint(int i, float3 delta_t, float3 t_entry) {
-					return mad(i, delta_t, t_entry); 
-				}
-
-                // Equation 8 (Deakin and Knackstead)
-				int3 delta_i3(float3 delta_u, float3 u, float3 delta_u_inv) {
-					return ceil(((delta_u > 0) + floor(u) - u) * delta_u_inv);
+				// Equation 14 (Deakin and Knackstead)
+				min16int3 delta_i3(min16float3 delta_u, float3 u, min16float3 delta_u_inv, min16float dist) {
+					return min16int3(((-delta_u > 0) + sign(delta_u) * dist + floor(u) - u) * delta_u_inv);
 				}
 
                 // Equation 9 (Deakin and Knackstead)
-                int delta_i(int3 delta_i3) {
-                    return max(min3(delta_i3), 1);
+                min16int delta_i(min16int3 delta_i3) {
+                    return max(ceil(min3(delta_i3)), 1);
                 }
 
 				// Vertex kernel //
@@ -112,72 +106,78 @@ Shader "VolumeRendering/Optimized/OccupancyMap"
 				// Fragment kernel //
 				// This fragment shader is heavily inspired by Lachlan Deakin's shader at https://github.com/LDeakin/VkVolume/blob/master/shaders/volume_render.frag
 				// Modifications have been made to make it work with my software architecture, as well as follow my own style
-				fixed4 frag(v2f vdata) : SV_Target
+				min16float4 frag(v2f vdata) : SV_Target
 				{
 					// Determine ray direction and length
+					//discard;
                     Ray ray;
 					ray.origin = vdata.t_0;
 					ray.dir = normalize(mul(unity_WorldToObject, vdata.world - _WorldSpaceCameraPos));
-					float3 ray_exit = ray_caster_get_back(vdata.t_0, ray.dir);
+					min16float3 ray_exit = ray_caster_get_back(vdata.t_0, ray.dir);
   					ray.length = length(vdata.t_0 - ray_exit);
+					
 
 					// Calculate amount of sample points and step length (with direction)
-					int n = (_HighQuality == 1) ? int(ceil(float(max3(_VolumeDims)) * ray.length * _Quality)) : 256;
-					float3 step_volume = ray.dir * ray.length / (float(n) - 1.0f);
+					min16int n = (_HighQuality == 1) ? min16int(ceil(float(max3(_VolumeDims)) * ray.length * _Quality)) : 256;
+					min16float3 step_volume = ray.dir * ray.length / (float(n) - 1.0f);
 
 					// This piece of code from Deakin makes performance smoother in some cases.
 					// Deakin's words:
 						// This test fixes a performance regression if view is oriented with edge/s of the volume
   						// perhaps due to precision issues with the bounding box intersection
-					float3 early_exit_test = ray.origin + step_volume;
+					min16float3 early_exit_test = ray.origin + step_volume;
 					if (any(early_exit_test <= 0) || any(early_exit_test >= 1)) {
-						return fixed4(0, 0, 0, 0);
+						return min16float4(0, 0, 0, 0);
 					}
 
 					// ESS values
-					float3 volume_to_occupancy_u = _VolumeDims / _BlockSize;
-					float3 step_occupancy = step_volume * volume_to_occupancy_u;
-					float3 step_occupancy_inv = 1 / step_occupancy;
-					int i_min = 0;
-					int3 last_u_int = int3(0, 0, 0);
-					int i_reverse = -int(ceil(_Quality));
+					min16float3 volume_to_occupancy_u = _VolumeDims / _BlockSize;
+					min16float3 step_occupancy = step_volume * volume_to_occupancy_u;
+					min16float3 step_occupancy_inv = 1 / step_occupancy;
+					min16int i_min = 0;
+					min16int3 last_u_int = min16int3(0, 0, 0);
+					min16int i_reverse = -min16int(ceil(_Quality));
 
 					// Final setup
 					float3 currentRayPos = ray.origin;
-					half oneMinusAlpha = 1;
-					fixed4 dst = fixed4(0, 0, 0, 0);
+					min16float oneMinusAlpha = 1;
+					min16float4 dst = min16float4(0, 0, 0, 0);
 
 					bool empty = false;
 
-					// Test amount of samples
+
+                    // Test amount of samples
                     //int num_volume_samples = 0;
                     //int num_distance_samples = 0;
                     //
 
-                    [loop]
-                    for (int i = 0; i < n; i) {
+                    [loop] [fastopt]
+                    for (min16int i = 0; i < n; i) {
 						float3 u = volume_to_occupancy_u * currentRayPos;
-						int3 u_int = int3(floor(u));
+						min16int3 u_int = min16int3(floor(u));
 						
 						[branch]
 						if (empty && any(u_int != last_u_int)) {
-							//num_distance_samples++; // Test amount of samples
-							float val = _OccupancyMap.Load(int4(u_int, 0));
-							empty = val > 0;
+                            //num_distance_samples++; // Test amount of samples
+							float distance = _DistanceMap.Load(int4(u_int, 0));
+							min16float distance_u = min16float(floor(distance * 255));
+							empty = distance > 0;
 							last_u_int = (empty) ? last_u_int : u_int;
-							i = (empty) ? i + delta_i(delta_i3(step_occupancy, u, step_occupancy_inv)) : int(max(i + i_reverse, i_min));
-							currentRayPos = findSamplePoint(i, step_volume, ray.origin);
+							i = (empty) ? i + delta_i(delta_i3(step_occupancy, u, step_occupancy_inv, distance_u)) : min16int(max(i + i_reverse, i_min));
+							currentRayPos = mad(i, step_volume, ray.origin);
 						} else {
-							//num_volume_samples++; // Test amount of samples
-							float density = tex3Dlod(_Volume, float4(currentRayPos, 0));
-							float4 src = tex2Dlod(_Transfer, float4(density, 0, 0, 0));							
+                            //num_volume_samples++; // Test amount of samples
+							min16float density = tex3Dlod(_Volume, float4(currentRayPos, 0));
+							min16float4 src = tex2Dlod(_Transfer, float4(density, 0, 0, 0));
 							empty = src.a <= 0;
+
 							last_u_int = (empty) ? last_u_int : u_int;
 
 							oneMinusAlpha = 1 - dst.a;
 							dst.a = mad(src.a, oneMinusAlpha, dst.a);
 							dst.rgb = mad(src.rgb * src.a, oneMinusAlpha, dst.rgb);
 
+							[branch]
 							if (dst.a >= _ERT) {
 								dst.a = 1;
 								break;
@@ -190,11 +190,10 @@ Shader "VolumeRendering/Optimized/OccupancyMap"
 
 					dst = saturate(dst);
 
-					//uint n_steps_max = uint(ceil(max3(_VolumeDims) * sqrt(3.0f)));
-
-                    //dst = float4(float(num_volume_samples + num_distance_samples) / float(n_steps_max), 0, 0, 1.0f); 
-
-					return dst;
+                    // Test amount of samples
+                    //uint n_steps_max = uint(ceil(max3(_VolumeDims) * sqrt(3.0f)));
+					//dst = float4(float(num_volume_samples) / float(n_steps_max), float(num_distance_samples) / float(n_steps_max), 0, 1); 
+                    return dst;
 				}
 			ENDCG
 			}

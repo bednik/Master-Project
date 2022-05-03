@@ -1,0 +1,63 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+RWTexture3D<float> Result;
+Texture2D<float4> transferFunction;
+Texture3D<float> volume;
+uint blockSize;
+
+SamplerState samplertransferFunction;
+
+[numthreads(8,8,1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    uint3 start = id * blockSize;
+    uint3 end = start + blockSize;
+    uint widthV, heightV, depthV, num_levels;
+    volume.GetDimensions(0, widthV, heightV, depthV, num_levels);
+    if (start.x >= widthV || start.y >= heightV || start.z >= depthV)
+    {
+        return;
+    }
+    
+    bool empty = true;
+    
+    [loop]
+    for (uint z = start.z; z < end.z; z++)
+    {
+        if (z >= depthV)
+            break;
+        [loop]
+        for (uint y = start.y; y < end.y; y++)
+        {
+            if (y >= heightV)
+                break;
+            [loop]
+            for (uint x = start.x; x < end.x; x++)
+            {
+                if (x >= widthV)
+                    break;
+                
+                float elem = volume[uint3(x, y, z)]; // Elem is between 0 and 1!!!!
+                
+                if (empty)
+                {
+                    //float4 col = transferFunction[float2(elem * 255, 0)];
+                    float4 col = transferFunction.SampleLevel(samplertransferFunction, float2(elem, 0.0), 0.0);
+                    empty = col.a <= 0.0;
+                }
+                
+                if (!empty)
+                {
+                    Result[id] = empty;
+                    return;
+                }
+
+            }
+
+        }
+    }
+    Result[id] = empty;
+}

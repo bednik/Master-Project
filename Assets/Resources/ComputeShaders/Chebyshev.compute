@@ -1,0 +1,117 @@
+/*
+    * These kernels transform an occupancy map to a Chebyshev distance map, based on Algorithms 1-3 in Deakin and Knackstedt's paper
+        * https://link.springer.com/content/pdf/10.1007/s41095-019-0155-y.pdf
+    * Make sure each kernel is finished running by waiting for the next frame between each dispatch (i.e. force rendering to take place between each dispatch)
+        * I'm not 100 % sure this is the case. Things like this would be easier in e.g. CUDA with barriers and the like
+    * Trans1 only needs to be run for y and z, Trans2 for x and z, and Trans3 for x and y
+        * For each plane, we will iterate through all values in said plane. Therefore we don't need e.g. x threads in the yz plane
+*/
+
+
+#pragma kernel Trans1
+#pragma kernel Trans2
+#pragma kernel Trans3
+
+// First InMap: Occupancy map from UniformSubdivision.compute
+// After that: Stage n-1's output
+Texture3D<float> InMap;
+Texture2D<float> ByteToFloat;
+RWTexture3D<float> OutMap;
+
+[numthreads(1, 8, 8)]
+void Trans1(uint3 id : SV_DispatchThreadID)
+{
+    int3 position = uint3(0, id.yz);
+    uint width, height, depth;
+    OutMap.GetDimensions(width, height, depth);
+
+    if (id.y >= height || id.z >= depth)
+        return;
+
+    uint prev = uint(floor(InMap[position] * 255));
+    OutMap[position] = ByteToFloat[uint2(prev, 0)];
+    
+    [loop]
+    for (position.x = 1; uint(position.x) < width; position.x++)
+    {
+        uint val = min(prev + 1, uint(floor(InMap[position] * 255)));
+        OutMap[position] = ByteToFloat[uint2(val, 0)];
+        prev = val;
+    }
+    
+    [loop]
+    for (position.x = width - 2; position.x >= 0; position.x--)
+    {
+        uint val = min(prev + 1, uint(floor(OutMap[position] * 255)));
+        OutMap[position] = ByteToFloat[uint2(val, 0)];
+        prev = val;
+    }
+}
+
+[numthreads(8, 1, 8)]
+void Trans2(uint3 id : SV_DispatchThreadID)
+{
+    uint3 position = id;
+    uint width, height, depth;
+    OutMap.GetDimensions(width, height, depth);
+    
+    if (id.x >= width || id.z >= depth)
+        return;
+    
+    [loop]
+    for (position.y = 0; uint(position.y) < height; position.y++)
+    {
+        uint distance = floor(InMap[position] * 255);
+        
+        [loop]
+        for (uint n = 1; n < distance; n++)
+        {
+            if (position.y >= n)
+            {
+                uint distance_n = floor(InMap[position - uint3(0, n, 0)] * 255);
+                distance = min(distance, max(n, distance_n));
+            }
+            
+            if ((position.y + n) < height && n < distance)
+            {
+                uint distance_n = floor(InMap[position + uint3(0, n, 0)] * 255);
+                distance = min(distance, max(n, distance_n));
+            }
+        }
+        OutMap[position] = ByteToFloat[uint2(distance, 0)];
+    }
+}
+
+[numthreads(8, 8, 1)]
+void Trans3(uint3 id : SV_DispatchThreadID)
+{
+    uint3 position = id;
+    uint width, height, depth;
+    OutMap.GetDimensions(width, height, depth);
+    
+    if (id.y >= height || id.x >= width)
+        return;
+    
+    [loop]
+    for (position.z = 0; uint(position.z) < depth; position.z++)
+    {
+        uint distance = floor(InMap[position] * 255);
+        
+        [loop]
+        for (uint n = 1; n < distance; n++)
+        {
+            if (position.z >= n)
+            {
+                uint distance_n = floor(InMap[position - uint3(0, 0, n)] * 255);
+                distance = min(distance, max(n, distance_n));
+            }
+            
+            if ((position.z + n) < depth && n < distance)
+            {
+                uint distance_n = floor(InMap[position + uint3(0, 0, n)] * 255);
+                distance = min(distance, max(n, distance_n));
+            }
+        }
+        OutMap[position] = ByteToFloat[uint2(distance, 0)];
+    }
+}

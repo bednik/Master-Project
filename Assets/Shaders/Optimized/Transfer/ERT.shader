@@ -29,7 +29,7 @@ Shader "VolumeRendering/Optimized/ERT"
 
 				sampler3D _Volume;
 				sampler2D _Transfer;
-				half _Intensity, _ThresholdMin, _ThresholdMax, _ERT, _Quality;
+				float _Intensity, _ThresholdMin, _ThresholdMax, _ERT, _Quality;
 				half3 _SliceMin, _SliceMax;
 				float3 _bbMin, _bbMax;
 				int3 _VolumeDims;
@@ -116,7 +116,7 @@ Shader "VolumeRendering/Optimized/ERT"
 				}
 
 				// Fragment kernel //
-				fixed4 frag(v2f vdata) : SV_Target
+				min16float4 frag(v2f vdata) : SV_Target
 				{
 					// Determine ray direction and length
                     Ray ray;
@@ -135,20 +135,20 @@ Shader "VolumeRendering/Optimized/ERT"
   						// perhaps due to precision issues with the bounding box intersection
 					float3 early_exit_test = ray.origin + step_volume;
 					if (any(early_exit_test <= 0) || any(early_exit_test >= 1)) {
-						return fixed4(0, 0, 0, 0);
+						return min16float4(0, 0, 0, 0);
 					}
 
 					// Final setup
 					float3 currentRayPos = ray.origin;
-					half oneMinusAlpha = 1;
-					fixed4 dst = fixed4(0, 0, 0, 0);
+					min16float oneMinusAlpha = 1;
+					min16float4 dst = min16float4(0, 0, 0, 0);
 
 					[loop]
-					for (int iter = 0; iter < n; iter++)
+					for (min16int iter = 0; iter < n; iter++)
 					{
 						// Sample the texture and set the value to 0 if it is outside the slice or not within the value thresholds
 						float density = tex3D(_Volume, currentRayPos);
-						float4 src = tex2D(_Transfer, density);
+						min16float4 src = tex2D(_Transfer, density);
 
 						oneMinusAlpha = 1 - dst.a;
 						dst.a = mad(src.a, oneMinusAlpha, dst.a);

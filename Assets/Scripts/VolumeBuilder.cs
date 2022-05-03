@@ -25,6 +25,7 @@ public class VolumeBuilder : MonoBehaviour
     private EmptySpaceSkipMethod emptySpaceSkipMethod;
     private Vector3 scale;
     [SerializeField] private GameObject render;
+    public GameObject speedUI;
     public Reset panic;
     private bool doneOcc = false;
     private bool doneCheb = false;
@@ -372,13 +373,11 @@ public class VolumeBuilder : MonoBehaviour
         GL.Flush();
         
         // Copy to normal texture, release rendertexture
-        RenderTexture.active = res;
         Graphics.CopyTexture(res, subdivision);
         yield return null;
-        RenderTexture.active = null;
         res.Release();
 
-        if (shaderIndex != 6)
+        if (emptySpaceSkipMethod != EmptySpaceSkipMethod.CHEBYSHEV)
         {
             material.SetTexture("_OccupancyMap", subdivision);
         }
@@ -445,10 +444,8 @@ public class VolumeBuilder : MonoBehaviour
         GL.Flush();
 
         // Copy to normal texture, release rendertexture
-        RenderTexture.active = outMap;
         Graphics.CopyTexture(outMap, storeTex);
         yield return null;
-        RenderTexture.active = null;
         material.SetTexture("_DistanceMap", storeTex);
 
         //////// TRANSFORM 2 ////////
@@ -462,10 +459,8 @@ public class VolumeBuilder : MonoBehaviour
         GL.Flush();
 
         // Copy to normal texture, release rendertexture
-        RenderTexture.active = outMap;
         Graphics.CopyTexture(outMap, storeTex);
         yield return null;
-        RenderTexture.active = null;
 
         material.SetTexture("_DistanceMap", storeTex);
 
@@ -481,10 +476,8 @@ public class VolumeBuilder : MonoBehaviour
         GL.Flush();
 
         // Copy to normal texture, release rendertexture
-        RenderTexture.active = outMap;
         Graphics.CopyTexture(outMap, storeTex);
         yield return null;
-        RenderTexture.active = null;
         outMap.Release();
 
 
@@ -506,9 +499,24 @@ public class VolumeBuilder : MonoBehaviour
         }
         Reset btn = Instantiate(panic, new Vector3(0, -0.62f, 2f), Quaternion.identity);
         GameObject gary = Instantiate(render, new Vector3(0, -0.2f, 2.5f), Quaternion.identity);
+        if (volumeType == VolumeType.US)
+        {
+            GameObject speed = Instantiate(speedUI, new Vector3(0, -0.2f, 2.5f), Quaternion.identity);
+            btn.speedUI = speed;
+        }
+        
         btn.render = gary;
         Transform transform_g = gary.GetComponent<Transform>();
         gary.GetComponent<MeshRenderer>().material = material;
+
+        VolumeRenderController controller = gary.GetComponent<VolumeRenderController>();
+        controller.volumeType = volumeType;
+        controller.emptySpaceSkipMethod = emptySpaceSkipMethod;
+        controller.m_volume = m_volume;
+        controller.emptySpaceSkip = emptySpaceSkip;
+        controller.transferFunction = transferFunction;
+        controller.m_blockSize = m_blockSize;
+
         transform_g.localScale = (volumeType == VolumeType.CT) ? scale : new Vector3(m_volume.width, m_volume.height, m_volume.depth) / 1000;
         Destroy(transform.parent.gameObject);
     }
@@ -576,7 +584,7 @@ public class VolumeBuilder : MonoBehaviour
         }
         else if (shaderIndex == 5)
         {
-            emptySpaceSkipMethod = EmptySpaceSkipMethod.SPARSELEAP;
+            emptySpaceSkipMethod = EmptySpaceSkipMethod.CHEBYSHEV;
         }
         else if (shaderIndex == 6)
         {
