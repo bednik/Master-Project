@@ -11,7 +11,8 @@
 /[Mm]emoryCaptures/
 
 # Ignore these assets
-/[Aa]ssets/[Rr]esources/
+/[Aa]ssets/[Rr]esources/[Vv]olume*
+/[Aa]ssets/[Rr]esources/IconTextures
 /[Aa]ssets/[Vv]olumeData/
 /[Aa]ssets/[Pp]ackages/
 /[Aa]ssets/[Pp]lugins/
