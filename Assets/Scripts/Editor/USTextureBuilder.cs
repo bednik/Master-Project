@@ -3,6 +3,7 @@ using UnityEditor;
 using System.Collections;
 using NumSharp;
 using System.IO;
+using System;
 
 
 public class USTextureBuilder : EditorWindow
@@ -76,7 +77,7 @@ public class USTextureBuilder : EditorWindow
             Directory.CreateDirectory(outputPath);
         }
 
-        for (int i = 1; i <= amount + 1; i++)
+        for (int i = 1; i <= amount; i++)
         {
             string volPath = "";
             string outPath = "";

@@ -36,7 +36,7 @@ public class CTTextureBuilder : EditorWindow
 
         int textureSize = width * height * depth;
 
-        Texture3D density = new Texture3D(width, height, depth, TextureFormat.R8, false);
+        Texture3D density = new Texture3D(width, height, depth, TextureFormat.R16, false);
 
         density.wrapMode = TextureWrapMode.Clamp;
         density.filterMode = FilterMode.Bilinear;
@@ -44,19 +44,26 @@ public class CTTextureBuilder : EditorWindow
 
         int min = short.MaxValue;
         int max = short.MinValue;
+        long sum = 0;
 
         // TODO: For larger textures, make a tiled version (i.e. take n rows at a time)
         using (var stream = new FileStream(inputPath, FileMode.Open))
         {
             var len = stream.Length;
 
-            byte[] colors = new byte[textureSize];
+            ushort[] colors = new ushort[textureSize];
+
+            // Hallo, Bendik from May 2022 here. This is tuned for a volume with values between -1000 and ~3000
+            // For a volume consisting of only byte values, use an R8 texture and byte values instead of shorts (and only read one byte)
+            // The idea that you see here is basically concatenating the bytes to make a 12 bit number, but to make it work with my transfer function I had to multiply by 16 to make it 16 bit
+            // This means you probably have to change this function if using it for a later project. It could also probably be a compute shader or at least multicore...
+            // *Smoke bomb* *Evil laugh* *Coughing* *Cartoony run-away sound*
             for (int i = 0; i < textureSize; i++)
             {
                 byte lower = (byte)stream.ReadByte();
                 byte higher = (byte)stream.ReadByte();
                 short val = (short)(lower + (higher << 8));
-                colors[i] = (byte)((val + 1024)/16);
+                colors[i] = (ushort)((val + 1024)*16);
                 min = (val < min) ? val : min;
                 max = (val > max) ? val : max;
             }

@@ -59,11 +59,11 @@ Shader "VolumeRendering/Optimized/Chebyshev"
 				};
 
 				// Adapted from https://stackoverflow.com/questions/28006184/get-component-wise-maximum-of-vector-in-glsl
-				min16uint max3(min16uint3 v) {
+				uint max3(uint3 v) {
 					return max(max(v.x, v.y), v.z);
 				}
 
-				min16int min3(min16int3 v) {
+				int min3(int3 v) {
 					return min(min(v.x, v.y), v.z);
 				}
 
@@ -83,12 +83,12 @@ Shader "VolumeRendering/Optimized/Chebyshev"
 				}
 
 				// Equation 14 (Deakin and Knackstead)
-				min16int3 delta_i3(float3 delta_u, float3 u, float3 delta_u_inv, min16float dist) {
-					return min16int3(ceil(((-delta_u > 0) + sign(delta_u) * dist + floor(u) - u) * delta_u_inv));
+				int3 delta_i3(float3 delta_u, float3 u, float3 delta_u_inv, half dist) {
+					return int3(ceil(((-delta_u > 0) + sign(delta_u) * dist + floor(u) - u) * delta_u_inv));
 				}
 
                 // Equation 9 (Deakin and Knackstead)
-                min16int delta_i(min16int3 delta_i3) {
+                int delta_i(int3 delta_i3) {
                     return max(min3(delta_i3), 1);
                 }
 
@@ -107,7 +107,7 @@ Shader "VolumeRendering/Optimized/Chebyshev"
 				// Fragment kernel //
 				// This fragment shader is heavily inspired by Lachlan Deakin's shader at https://github.com/LDeakin/VkVolume/blob/master/shaders/volume_render.frag
 				// Modifications have been made to make it work with my software architecture, as well as follow my own style
-				min16float4 frag(v2f vdata) : SV_Target
+				half4 frag(v2f vdata) : SV_Target
 				{
 					// Determine ray direction and length
 					//discard;
@@ -119,7 +119,7 @@ Shader "VolumeRendering/Optimized/Chebyshev"
 					
 
 					// Calculate amount of sample points and step length (with direction)
-					min16int n = (_HighQuality == 1) ? min16int(ceil(float(max3(_VolumeDims)) * ray.length * _Quality)) : 256;
+					int n = (_HighQuality == 1) ? int(ceil(float(max3(_VolumeDims)) * ray.length * _Quality)) : 256;
 					float3 step_volume = ray.dir * ray.length / (float(n) - 1.0f);
 
 					// This piece of code from Deakin makes performance smoother in some cases.
@@ -128,21 +128,21 @@ Shader "VolumeRendering/Optimized/Chebyshev"
   						// perhaps due to precision issues with the bounding box intersection
 					float3 early_exit_test = ray.origin + step_volume;
 					if (any(early_exit_test <= 0) || any(early_exit_test >= 1)) {
-						return min16float4(0, 0, 0, 0);
+						return half4(0, 0, 0, 0);
 					}
 
 					// ESS values
 					float3 volume_to_occupancy_u = _VolumeDims / _BlockSize;
 					float3 step_occupancy = step_volume * volume_to_occupancy_u;
 					float3 step_occupancy_inv = 1 / step_occupancy;
-					min16int i_min = 0;
-					min16int3 last_u_int = min16int3(0, 0, 0);
-					min16int i_reverse = -min16int(ceil(_Quality));
+					int i_min = 0;
+					int3 last_u_int = int3(0, 0, 0);
+					int i_reverse = -int(ceil(_Quality));
 
 					// Final setup
 					float3 currentRayPos = ray.origin;
-					min16float oneMinusAlpha = 1;
-					min16float4 dst = min16float4(0, 0, 0, 0);
+					float oneMinusAlpha = 1;
+					float4 dst = float4(0, 0, 0, 0);
 
 					bool empty = false;
 
@@ -153,23 +153,23 @@ Shader "VolumeRendering/Optimized/Chebyshev"
                     //
 
                     [loop]
-                    for (min16int i = 0; i < n; i) {
+                    for (int i = 0; i < n; i) {
 						float3 u = volume_to_occupancy_u * currentRayPos;
-						min16int3 u_int = min16int3(floor(u));
+						int3 u_int = int3(floor(u));
 						
 						[branch]
 						if (empty && any(u_int != last_u_int)) {
                             //num_distance_samples++; // Test amount of samples
 							float distance = _DistanceMap.Load(int4(u_int, 0));
-							min16float distance_u = min16float(floor(distance * 255));
+							float distance_u = float(floor(distance * 255));
 							empty = distance > 0;
 							last_u_int = (empty) ? last_u_int : u_int;
-							i = (empty) ? i + delta_i(delta_i3(step_occupancy, u, step_occupancy_inv, distance_u)) : min16int(max(i + i_reverse, i_min));
+							i = (empty) ? i + delta_i(delta_i3(step_occupancy, u, step_occupancy_inv, distance_u)) : int(max(i + i_reverse, i_min));
 							currentRayPos = mad(i, step_volume, ray.origin);
 						} else {
                             //num_volume_samples++; // Test amount of samples
 							float density = tex3Dlod(_Volume, float4(currentRayPos, 0));
-							min16float4 src = tex2Dlod(_Transfer, float4(density, 0, 0, 0));							
+							float4 src = tex2Dlod(_Transfer, float4(density, 0, 0, 0));							
 							empty = src.a <= 0;
 
 							last_u_int = (empty) ? last_u_int : u_int;

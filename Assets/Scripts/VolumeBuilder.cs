@@ -21,7 +21,7 @@ public class VolumeBuilder : MonoBehaviour
     private int m_blockSize, shaderIndex;
     private Material material;
     private VolumeType volumeType;
-    private bool emptySpaceSkip, highPrecision;
+    public bool emptySpaceSkip, highPrecision;
     private EmptySpaceSkipMethod emptySpaceSkipMethod;
     private Vector3 scale;
     [SerializeField] private GameObject render;
@@ -30,6 +30,7 @@ public class VolumeBuilder : MonoBehaviour
     private bool doneOcc = false;
     private bool doneCheb = false;
     private int highQuality = 0;
+    private string USVol = "A6";
 
     [SerializeField] InteractableToggleCollection volumeList;
     [SerializeField] InteractableToggleCollection qualityToggle;
@@ -51,10 +52,15 @@ public class VolumeBuilder : MonoBehaviour
         return (byte)Mathf.Max(0, Mathf.Min((float)spline.Interpolate(x), 255));
     }
 
+    private byte InterpolatedDoubleToByte(LinearSpline spline, double x)
+    {
+        return (byte)Mathf.Max(0, Mathf.Min((float)spline.Interpolate(x), 255));
+    }
+
     private Color32[] GenerateColorTable(List<AlphaTransferFunctionPoint> alphaPoints, List<ColorTransferFunctionPoint> colorPoints, bool highPrecision)
     {
         CubicSpline[] m_colorTransferFunction = new CubicSpline[3];
-        Color32[] colors = (highPrecision) ? new Color32[2048] : new Color32[256];
+        Color32[] colors = (highPrecision) ? new Color32[4096] : new Color32[256];
         double[] fx = new double[alphaPoints.Count];
         double[] x = new double[alphaPoints.Count];
 
@@ -86,7 +92,51 @@ public class VolumeBuilder : MonoBehaviour
         m_colorTransferFunction[1] = CubicSpline.InterpolateAkimaSorted(d, g);
         m_colorTransferFunction[2] = CubicSpline.InterpolateAkimaSorted(d, b);
 
-        int n = (highPrecision) ? 2048 : 256;
+        int n = (highPrecision) ? 4096 : 256;
+        for (i = 0; i < n; i++)
+        {
+            colors[i] = new Color32(InterpolatedDoubleToByte(m_colorTransferFunction[0], i), InterpolatedDoubleToByte(m_colorTransferFunction[1], i), InterpolatedDoubleToByte(m_colorTransferFunction[2], i), InterpolatedDoubleToByte(m_opacityTransferFunction, i));
+        }
+
+        return colors;
+    }
+
+    private Color32[] GenerateColorTableLinear(List<AlphaTransferFunctionPoint> alphaPoints, List<ColorTransferFunctionPoint> colorPoints, bool highPrecision)
+    {
+        LinearSpline[] m_colorTransferFunction = new LinearSpline[3];
+        Color32[] colors = (highPrecision) ? new Color32[4096] : new Color32[256];
+        double[] fx = new double[alphaPoints.Count];
+        double[] x = new double[alphaPoints.Count];
+
+        int i = 0;
+        foreach (AlphaTransferFunctionPoint point in alphaPoints)
+        {
+            x[i] = point.density;
+            fx[i] = point.a;
+            i++;
+        }
+        LinearSpline m_opacityTransferFunction = LinearSpline.InterpolateSorted(x, fx);
+
+        double[] d = new double[colorPoints.Count];
+        double[] r = new double[colorPoints.Count];
+        double[] g = new double[colorPoints.Count];
+        double[] b = new double[colorPoints.Count];
+
+        i = 0;
+        foreach (ColorTransferFunctionPoint point in colorPoints)
+        {
+            d[i] = point.density;
+            r[i] = point.r;
+            g[i] = point.g;
+            b[i] = point.b;
+            i++;
+        }
+
+        m_colorTransferFunction[0] = LinearSpline.InterpolateSorted(d, r);
+        m_colorTransferFunction[1] = LinearSpline.InterpolateSorted(d, g);
+        m_colorTransferFunction[2] = LinearSpline.InterpolateSorted(d, b);
+
+        int n = (highPrecision) ? 4096 : 256;
         for (i = 0; i < n; i++)
         {
             colors[i] = new Color32(InterpolatedDoubleToByte(m_colorTransferFunction[0], i), InterpolatedDoubleToByte(m_colorTransferFunction[1], i), InterpolatedDoubleToByte(m_colorTransferFunction[2], i), InterpolatedDoubleToByte(m_opacityTransferFunction, i));
@@ -99,12 +149,13 @@ public class VolumeBuilder : MonoBehaviour
     {
         List<ColorTransferFunctionPoint> colorTransferFunctionPoints;
         List<AlphaTransferFunctionPoint> opacityTransferFunctionPoints;
-        Color32[] colors = new Color32[256];
+        int size = (highPrecision) ? 4096 : 256;
+        Color32[] colors = new Color32[size];
                 
         switch (type)
         {
             case TransferFunctionType.LINEAR:
-                for (int i = 0; i < 256; i++)
+                for (int i = 0; i < size; i++)
                 {
                     colors[i] = new Color32((byte)i, (byte)i, (byte)i, (byte)i);
                 }
@@ -156,37 +207,86 @@ public class VolumeBuilder : MonoBehaviour
                     new AlphaTransferFunctionPoint(128, 255)
                 };
 
-                colors = GenerateColorTable(opacityTransferFunctionPoints, colorTransferFunctionPoints, highPrecision);
+                colors = GenerateColorTableLinear(opacityTransferFunctionPoints, colorTransferFunctionPoints, highPrecision);
 
                 break;
 
             case TransferFunctionType.CT_BONES_8:
+                if (highPrecision)
+                {
+                    colorTransferFunctionPoints = new List<ColorTransferFunctionPoint>
+                    {
+                        new ColorTransferFunctionPoint(77, 77, 255, 0),
+                        new ColorTransferFunctionPoint(77, 255, 77, 512),
+                        new ColorTransferFunctionPoint(255, 0, 0, 1463.28),
+                        new ColorTransferFunctionPoint(255, 233, 10, 1659.15),
+                        new ColorTransferFunctionPoint(255, 77, 77, 1953),
+                        new ColorTransferFunctionPoint(255, 77, 77, 4095),
+                    };
+
+                    opacityTransferFunctionPoints = new List<AlphaTransferFunctionPoint>
+                    {
+                        new AlphaTransferFunctionPoint(0, 0),
+                        new AlphaTransferFunctionPoint(0, 1152.19),
+                        new AlphaTransferFunctionPoint(48, 1278.93),
+                        new AlphaTransferFunctionPoint(51, 1952),
+                        new AlphaTransferFunctionPoint(51, 4096)
+                    };
+                }
+                else
+                {
+                    colorTransferFunctionPoints = new List<ColorTransferFunctionPoint>
+                    {
+                        new ColorTransferFunctionPoint(77, 77, 255, 0),
+                        new ColorTransferFunctionPoint(77, 255, 77, 32),
+                        new ColorTransferFunctionPoint(255, 0, 0, 91),
+                        new ColorTransferFunctionPoint(255, 233, 10, 103),
+                        new ColorTransferFunctionPoint(255, 77, 77, 122),
+                        new ColorTransferFunctionPoint(255, 77, 77, 255),
+                    };
+
+                    opacityTransferFunctionPoints = new List<AlphaTransferFunctionPoint>
+                    {
+                        new AlphaTransferFunctionPoint(0, 0),
+                        new AlphaTransferFunctionPoint(0, 72),
+                        new AlphaTransferFunctionPoint(48, 79),
+                        new AlphaTransferFunctionPoint(51, 122),
+                        new AlphaTransferFunctionPoint(51, 255)
+                    };
+                }
+                
+
+                colors = GenerateColorTableLinear(opacityTransferFunctionPoints, colorTransferFunctionPoints, highPrecision);
+
+                break;
+
+            case TransferFunctionType.ULTRASOUND:
+
                 colorTransferFunctionPoints = new List<ColorTransferFunctionPoint>
                 {
-                    new ColorTransferFunctionPoint(77, 77, 255, 0),
-                    new ColorTransferFunctionPoint(77, 255, 77, 32),
-                    new ColorTransferFunctionPoint(255, 0, 0, 91),
-                    new ColorTransferFunctionPoint(255, 233, 10, 103),
-                    new ColorTransferFunctionPoint(255, 77, 77, 122),
-                    new ColorTransferFunctionPoint(255, 77, 77, 255),
+                    new ColorTransferFunctionPoint(0, 0, 0, -3024),
+                    new ColorTransferFunctionPoint(140.0001, 63.9999, 38.0001, 12.8256530761719),
+                    new ColorTransferFunctionPoint(225.00001500000002, 154.00010999999998, 73.99998000000001, 251.105),
+                    new ColorTransferFunctionPoint(255, 238.943415, 243.405405, 439.291),
+                    new ColorTransferFunctionPoint(211.00000500000002, 168.00011999999998, 255, 3071)
                 };
 
                 opacityTransferFunctionPoints = new List<AlphaTransferFunctionPoint>
                 {
                     new AlphaTransferFunctionPoint(0, 0),
-                    new AlphaTransferFunctionPoint(0, 72),
-                    new AlphaTransferFunctionPoint(48, 79),
-                    new AlphaTransferFunctionPoint(51, 122),
-                    new AlphaTransferFunctionPoint(51, 255)
+                    new AlphaTransferFunctionPoint(0, 67),
+                    new AlphaTransferFunctionPoint(258.333526611328, 92.39130511879917),
+                    new AlphaTransferFunctionPoint(162.60870248079294, 535.864135742188),
+                    new AlphaTransferFunctionPoint(160.68696320056911, 2745.43505859375),
+                    new AlphaTransferFunctionPoint(157.098101377487085, 3129.70825195312)
                 };
 
-                colors = GenerateColorTable(opacityTransferFunctionPoints, colorTransferFunctionPoints, highPrecision);
+                colors = GenerateColorTableLinear(opacityTransferFunctionPoints, colorTransferFunctionPoints, highPrecision);
 
                 break;
-
         }
 
-        Texture2D transferFunction = new Texture2D(256, 1, TextureFormat.RGBA32, false)
+        Texture2D transferFunction = new Texture2D(size, 1, TextureFormat.RGBA32, false)
         {
             wrapMode = TextureWrapMode.Clamp,
             filterMode = FilterMode.Bilinear,
@@ -510,6 +610,7 @@ public class VolumeBuilder : MonoBehaviour
         gary.GetComponent<MeshRenderer>().material = material;
 
         VolumeRenderController controller = gary.GetComponent<VolumeRenderController>();
+        controller.USVol = USVol;
         controller.volumeType = volumeType;
         controller.emptySpaceSkipMethod = emptySpaceSkipMethod;
         controller.m_volume = m_volume;
@@ -615,40 +716,60 @@ public class VolumeBuilder : MonoBehaviour
     public IEnumerator PickVolume()
     {
         ResourceRequest req;
+        bool highPrecision_prev = highPrecision;
         switch (volumeList.CurrentIndex)
         {
             case 0:
                 volumeType = VolumeType.US;
+                USVol = "A6";
                 highPrecision = false;
                 req = Resources.LoadAsync("VolumeTextures/US/A6/vol01");
                 break;
             case 1:
+                volumeType = VolumeType.US;
+                USVol = "A8";
+                highPrecision = false;
+                req = Resources.LoadAsync("VolumeTextures/US/A8/vol01");
+                break;
+            case 2:
+                volumeType = VolumeType.US;
+                USVol = "1I";
+                highPrecision = false;
+                req = Resources.LoadAsync("VolumeTextures/US/1I/vol01");
+                break;
+            case 3:
                 volumeType = VolumeType.CT;
                 scale = new Vector3(512, 512, 1469) / 1000;
                 highPrecision = false;
                 req = Resources.LoadAsync("VolumeTextures/CT/small_pig");
                 break;
-            case 2:
+            case 4:
                 volumeType = VolumeType.CT;
                 scale = new Vector3(512, 512, 1469) / 1000;
                 highPrecision = false;
                 req = Resources.LoadAsync("VolumeTextures/CT/medium_pig");
                 break;
-            case 3:
+            case 5:
                 volumeType = VolumeType.CT;
                 scale = new Vector3(0.286f, 0.286f, 0.620f);
                 highPrecision = false;
                 req = Resources.LoadAsync("VolumeTextures/CT/thorax");
                 break;
-            case 4:
+            case 6:
                 volumeType = VolumeType.MRI;
                 highPrecision = false;
                 req = Resources.LoadAsync("VolumeTextures/MRI/knee");
                 break;
-            case 5:
+            case 7:
                 volumeType = VolumeType.MRI;
                 highPrecision = false;
                 req = Resources.LoadAsync("VolumeTextures/MRI/abdomen");
+                break;
+            case 8:
+                volumeType = VolumeType.CT;
+                scale = new Vector3(0.286f, 0.286f, 0.620f);
+                highPrecision = true;
+                req = Resources.LoadAsync("VolumeTextures/CT/thorax16");
                 break;
             default:
                 volumeType = VolumeType.CT;
@@ -664,6 +785,9 @@ public class VolumeBuilder : MonoBehaviour
         }
 
         m_volume = (Texture3D)req.asset;
+
+        // Update transfer function if the precision changes
+        if (highPrecision_prev != highPrecision) PickTransferFunctionEvent();
 
         yield return null;
     }

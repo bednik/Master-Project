@@ -10,7 +10,7 @@ namespace VolumeRendering
     [System.Serializable]
     class ColorTransferFunctionPoint
     {
-        public ColorTransferFunctionPoint(byte _r, byte _g, byte _b, byte _density)
+        public ColorTransferFunctionPoint(double _r, double _g, double _b, double _density)
         {
             r = _r;
             g = _g;
@@ -19,20 +19,20 @@ namespace VolumeRendering
         }
 
         [SerializeField]
-        public byte r, g, b, density;
+        public double r, g, b, density;
     }
 
     [System.Serializable]
     class AlphaTransferFunctionPoint
     {
-        public AlphaTransferFunctionPoint(byte _a, byte _density)
+        public AlphaTransferFunctionPoint(double _a, double _density)
         {
             a = _a;
             density = _density;
         }
 
         [SerializeField]
-        public byte a, density;
+        public double a, density;
     }
 
     public enum EmptySpaceSkipMethod
@@ -55,7 +55,8 @@ namespace VolumeRendering
         LINEAR,
         RAMP,
         MRDEFAULT,
-        CT_BONES_8
+        CT_BONES_8,
+        ULTRASOUND
     }
 
     public enum VolumeType

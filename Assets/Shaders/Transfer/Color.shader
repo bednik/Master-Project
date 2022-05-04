@@ -169,7 +169,7 @@ Shader "VolumeRendering/Transfer/Color"
 
 						currentRayPos += step_volume;
 					}
-
+					
 					dst = saturate(dst);
 
 					return dst;

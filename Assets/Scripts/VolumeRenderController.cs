@@ -32,6 +32,8 @@ public class VolumeRenderController : MonoBehaviour
     private int[] dims;
 
     public float delay = 0.1f;
+
+    public string USVol = "A6";
     #endregion
 
     IEnumerator PreprocessESS()
@@ -111,7 +113,7 @@ public class VolumeRenderController : MonoBehaviour
 
         // Fetch the new texture
         ResourceRequest req;
-        req = Resources.LoadAsync("VolumeTextures/US/A6/vol0" + currentTex);
+        req = Resources.LoadAsync("VolumeTextures/US/" + USVol + "/vol0" + currentTex);
         if (!req.isDone)
         {
             yield return null;

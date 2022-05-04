@@ -116,7 +116,7 @@ Shader "VolumeRendering/Optimized/ERT"
 				}
 
 				// Fragment kernel //
-				min16float4 frag(v2f vdata) : SV_Target
+				half4 frag(v2f vdata) : SV_Target
 				{
 					// Determine ray direction and length
                     Ray ray;
@@ -135,20 +135,20 @@ Shader "VolumeRendering/Optimized/ERT"
   						// perhaps due to precision issues with the bounding box intersection
 					float3 early_exit_test = ray.origin + step_volume;
 					if (any(early_exit_test <= 0) || any(early_exit_test >= 1)) {
-						return min16float4(0, 0, 0, 0);
+						return half4(0, 0, 0, 0);
 					}
 
 					// Final setup
 					float3 currentRayPos = ray.origin;
-					min16float oneMinusAlpha = 1;
-					min16float4 dst = min16float4(0, 0, 0, 0);
+					half oneMinusAlpha = 1;
+					half4 dst = half4(0, 0, 0, 0);
 
 					[loop]
-					for (min16int iter = 0; iter < n; iter++)
+					for (half iter = 0; iter < n; iter++)
 					{
 						// Sample the texture and set the value to 0 if it is outside the slice or not within the value thresholds
 						float density = tex3D(_Volume, currentRayPos);
-						min16float4 src = tex2D(_Transfer, density);
+						half4 src = tex2D(_Transfer, density);
 
 						oneMinusAlpha = 1 - dst.a;
 						dst.a = mad(src.a, oneMinusAlpha, dst.a);
