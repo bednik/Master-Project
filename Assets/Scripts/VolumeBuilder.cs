@@ -29,8 +29,10 @@ public class VolumeBuilder : MonoBehaviour
     public Reset panic;
     private bool doneOcc = false;
     private bool doneCheb = false;
+    private bool doneNormal = false;
     private int highQuality = 0;
     private string USVol = "A6";
+    private bool shaded = false;
 
     [SerializeField] InteractableToggleCollection volumeList;
     [SerializeField] InteractableToggleCollection qualityToggle;
@@ -296,6 +298,48 @@ public class VolumeBuilder : MonoBehaviour
         transferFunction.Apply();
 
         return transferFunction;
+    }
+
+    #endregion
+
+    #region Preprocessing
+
+    private IEnumerator CalculateNormals()
+    {
+        while (!doneOcc || !doneCheb)
+        {
+            yield return null;
+        }
+
+        ComputeShader cs = (ComputeShader)Resources.Load("ComputeShaders/GetNormals");
+        RenderTexture res = new RenderTexture(m_volume.width, m_volume.height, 0, RenderTextureFormat.ARGB32)
+        {
+            dimension = UnityEngine.Rendering.TextureDimension.Tex3D,
+            volumeDepth = m_volume.depth,
+            enableRandomWrite = true,
+            filterMode = FilterMode.Bilinear
+        };
+        res.Create();
+
+        int kernelHandle = cs.FindKernel("CSMain");
+        cs.SetTexture(kernelHandle, "Result", res, 0);
+        cs.SetTexture(kernelHandle, "Volume", m_volume, 0);
+        cs.Dispatch(kernelHandle, Mathf.CeilToInt((float)m_volume.width / 8), Mathf.CeilToInt((float)m_volume.height / 8), m_volume.depth);
+        yield return null;
+
+        Texture3D newMainTexture = new Texture3D(m_volume.width, m_volume.height, m_volume.depth, TextureFormat.RGBA32, false)
+        {
+            wrapMode = TextureWrapMode.Clamp,
+            filterMode = FilterMode.Bilinear,
+            anisoLevel = 0
+        };
+        Graphics.CopyTexture(res, newMainTexture);
+        yield return null;
+
+        material.SetTexture("_Volume", newMainTexture);
+        m_volume = newMainTexture;
+        res.Release();
+        doneNormal = true;
     }
 
     #endregion
@@ -593,10 +637,21 @@ public class VolumeBuilder : MonoBehaviour
 
     private IEnumerator TimedDestruction()
     {
-        while (!doneOcc || !doneCheb)
+        if (shaded)
         {
-            yield return null;
+            while (!doneNormal)
+            {
+                yield return null;
+            }
         }
+        else
+        {
+            while (!doneCheb || !doneOcc)
+            {
+                yield return null;
+            }
+        }
+        
         Reset btn = Instantiate(panic, new Vector3(0, -0.62f, 2f), Quaternion.identity);
         GameObject gary = Instantiate(render, new Vector3(0, -0.2f, 2.5f), Quaternion.identity);
         if (volumeType == VolumeType.US)
@@ -617,6 +672,7 @@ public class VolumeBuilder : MonoBehaviour
         controller.emptySpaceSkip = emptySpaceSkip;
         controller.transferFunction = transferFunction;
         controller.m_blockSize = m_blockSize;
+        controller.shaded = shaded;
 
         transform_g.localScale = (volumeType == VolumeType.CT) ? scale : new Vector3(m_volume.width, m_volume.height, m_volume.depth) / 1000;
         Destroy(transform.parent.gameObject);
@@ -659,7 +715,14 @@ public class VolumeBuilder : MonoBehaviour
             doneOcc = true;
             doneCheb = true;
         }
+
         material.SetVector("_VolumeDims", new Vector3(m_volume.width, m_volume.height, m_volume.depth));
+
+        if (shaded)
+        {
+            StartCoroutine(CalculateNormals());
+        }
+
         StartCoroutine(TimedDestruction());
     }
 
@@ -675,22 +738,17 @@ public class VolumeBuilder : MonoBehaviour
         material = new Material(m_shader);
 
         emptySpaceSkip = shaderIndex > 2;
+        
         if (shaderIndex == 3)
-        {
-            emptySpaceSkipMethod = EmptySpaceSkipMethod.UNIFORM;
-        }
-        else if (shaderIndex == 4)
         {
             emptySpaceSkipMethod = EmptySpaceSkipMethod.OCCUPANCY;
         }
-        else if (shaderIndex == 5)
+        else if (shaderIndex >= 4)
         {
             emptySpaceSkipMethod = EmptySpaceSkipMethod.CHEBYSHEV;
         }
-        else if (shaderIndex == 6)
-        {
-            emptySpaceSkipMethod = EmptySpaceSkipMethod.CHEBYSHEV;
-        }
+
+        shaded = shaderIndex == 11;
     }
 
     public void UpdateERT()
