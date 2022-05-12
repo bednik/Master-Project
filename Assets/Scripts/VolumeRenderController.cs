@@ -21,12 +21,17 @@ public class VolumeRenderController : MonoBehaviour
     public bool emptySpaceSkip;
 
     public RenderTexture outMap;
+
+    public RenderTexture normalMapper;
+
     private Texture3D storeTex;
+    private Texture3D normalStoreTex;
 
     private int currentTex = 1;
     private Material material;
     private bool doneESS = false;
     private bool ready = true;
+    public bool shaded = false;
     public ComputeShader cs, cs_occ;
 
     private int[] dims;
@@ -100,6 +105,29 @@ public class VolumeRenderController : MonoBehaviour
         doneESS = true;
     }
 
+    private IEnumerator CalculateNormals()
+    {
+        while (!doneESS)
+        {
+            yield return null;
+        }
+
+        ComputeShader cs = (ComputeShader)Resources.Load("ComputeShaders/GetNormals");
+
+        int kernelHandle = cs.FindKernel("CSMain");
+        cs.SetTexture(kernelHandle, "Result", normalMapper, 0);
+        cs.SetTexture(kernelHandle, "Volume", m_volume, 0);
+        cs.Dispatch(kernelHandle, Mathf.CeilToInt((float)m_volume.width / 8), Mathf.CeilToInt((float)m_volume.height / 8), m_volume.depth);
+        yield return null;
+
+        Graphics.CopyTexture(normalMapper, normalStoreTex);
+        
+        yield return null;
+        
+        m_volume = normalStoreTex;
+        material.SetTexture("_Volume", m_volume);
+    }
+
     private IEnumerator updateUS()
     {
         if (currentTex >= 11)
@@ -123,15 +151,9 @@ public class VolumeRenderController : MonoBehaviour
         yield return new WaitForSecondsRealtime(delay);
 
         // Preprocess empty space skipping
-        if (emptySpaceSkip)
-        {
-            //doneESS = false;
-            yield return StartCoroutine(PreprocessESS());
-            //if (!doneESS)
-            //{
-            //    yield return null;
-            //}
-        }
+        if (emptySpaceSkip) yield return StartCoroutine(PreprocessESS());
+
+        if (shaded) yield return StartCoroutine(CalculateNormals());
 
         material.SetTexture("_Volume", m_volume);
         ready = true;
@@ -173,6 +195,23 @@ public class VolumeRenderController : MonoBehaviour
             anisoLevel = 0
         };
         storeTex.Apply();
+
+        normalMapper = new RenderTexture(m_volume.width, m_volume.height, 0, RenderTextureFormat.ARGB32)
+        {
+            dimension = UnityEngine.Rendering.TextureDimension.Tex3D,
+            volumeDepth = m_volume.depth,
+            enableRandomWrite = true,
+            filterMode = FilterMode.Bilinear
+        };
+        normalMapper.Create();
+
+        normalStoreTex = new Texture3D(m_volume.width, m_volume.height, m_volume.depth, TextureFormat.RGBA32, false)
+        {
+            wrapMode = TextureWrapMode.Clamp,
+            filterMode = FilterMode.Bilinear,
+            anisoLevel = 0
+        };
+        normalStoreTex.Apply();
 
         //cs_occ = (ComputeShader)Resources.Load("ComputeShaders/UniformSubdivision");
         //cs = (ComputeShader)Resources.Load("ComputeShaders/Chebyshev");

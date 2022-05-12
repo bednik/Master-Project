@@ -1,0 +1,32 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+Texture3D<float> Volume;
+RWTexture3D<float4> Result;
+
+// REVISIT: If the result is wacky, see if it would be better to use the values from the transfer function
+[numthreads(8,8,1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    float density = Volume[id];
+    float3 p1, p2;
+    float3 normal = float3(0, 0, 0);
+    
+    uint3 volumeDims;
+    uint mip;
+    Volume.GetDimensions(0, volumeDims.x, volumeDims.y, volumeDims.z, mip);
+    
+    // REVISIT: May just put the edges as not having a normal?
+    p1.x = Volume[uint3(max(id.x - 1, 0), id.yz)];
+    p2.x = Volume[uint3(min(id.x + 1, volumeDims.x), id.yz)];
+    p1.y = Volume[uint3(id.x, max(id.y - 1, 0), id.z)];
+    p2.y = Volume[uint3(id.x, min(id.y + 1, volumeDims.y), id.z)];
+    p1.z = Volume[uint3(id.xy, max(id.z - 1, 0))];
+    p2.z = Volume[uint3(id.xy, max(id.z + 1, volumeDims.z))];
+    
+    normal = normalize(p2 - p1);
+
+    Result[id] = float4(normal, density);
+}
