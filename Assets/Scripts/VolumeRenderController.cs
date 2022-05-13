@@ -225,4 +225,16 @@ public class VolumeRenderController : MonoBehaviour
             StartCoroutine(updateUS());
         }
     }
+
+    public void UpdateQuality(float value)
+    {
+        Debug.Log("TestQuality");
+        material.SetFloat("_Quality", value);
+    }
+
+    public void UpdateAmbient(float value)
+    {
+        Debug.Log("TestAmbient");
+        material.SetFloat("_Ambient", value);
+    }
 }

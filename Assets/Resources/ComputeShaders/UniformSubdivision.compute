@@ -1,4 +1,3 @@
-// Each #kernel tells which function to compile; you can have many kernels
 #pragma kernel CSMain
 
 // Create a RenderTexture with enableRandomWrite flag and set it
@@ -10,6 +9,7 @@ uint blockSize;
 
 SamplerState samplertransferFunction;
 
+// Based on https://github.com/LDeakin/VkVolume/blob/master/shaders/distance_map.comp
 [numthreads(8,8,1)]
 void CSMain (uint3 id : SV_DispatchThreadID)
 {

@@ -503,12 +503,20 @@ PrefabInstance:
       value: 
       objectReference: {fileID: 7054210563526139857, guid: 571596f92a8b5764b97ee895d0c0cc9e, type: 3}
     - target: {fileID: 4516058337928569041, guid: 9a45c35c4781ae54d81f31251f7d3be4, type: 3}
+      propertyPath: ambientUI
+      value: 
+      objectReference: {fileID: 1029631615139000015, guid: e4dcc83fed4bc49409f9b08955f8a174, type: 3}
+    - target: {fileID: 4516058337928569041, guid: 9a45c35c4781ae54d81f31251f7d3be4, type: 3}
+      propertyPath: qualityUI
+      value: 
+      objectReference: {fileID: 3895038543303784025, guid: 7c360ff9d9837ff4eaa09561b2372bd5, type: 3}
+    - target: {fileID: 4516058337928569041, guid: 9a45c35c4781ae54d81f31251f7d3be4, type: 3}
       propertyPath: qualityToggle
       value: 
       objectReference: {fileID: 4516058339644884017}
     - target: {fileID: 4516058338521003020, guid: 9a45c35c4781ae54d81f31251f7d3be4, type: 3}
       propertyPath: currentIndex
-      value: 2
+      value: 4
       objectReference: {fileID: 0}
     - target: {fileID: 4516058339171643888, guid: 9a45c35c4781ae54d81f31251f7d3be4, type: 3}
       propertyPath: m_Name

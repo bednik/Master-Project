@@ -25,7 +25,7 @@ public class VolumeBuilder : MonoBehaviour
     private EmptySpaceSkipMethod emptySpaceSkipMethod;
     private Vector3 scale;
     [SerializeField] private GameObject render;
-    public GameObject speedUI;
+    public GameObject speedUI, qualityUI, ambientUI;
     public Reset panic;
     private bool doneOcc = false;
     private bool doneCheb = false;
@@ -656,8 +656,20 @@ public class VolumeBuilder : MonoBehaviour
         GameObject gary = Instantiate(render, new Vector3(0, -0.2f, 2.5f), Quaternion.identity);
         if (volumeType == VolumeType.US)
         {
-            GameObject speed = Instantiate(speedUI, new Vector3(0, -0.2f, 2.5f), Quaternion.identity);
+            GameObject speed = Instantiate(speedUI, new Vector3(0, 0f, 3f), Quaternion.identity);
             btn.speedUI = speed;
+        }
+
+        if (emptySpaceSkip)
+        {
+            GameObject quality = Instantiate(qualityUI, new Vector3(0.529f, 0f, 3f), Quaternion.Euler(new Vector3(0, 32.89f, 0)));
+            btn.qualityUI = quality;
+        }
+
+        if (shaded)
+        {
+            GameObject ambient = Instantiate(ambientUI, new Vector3(-0.529f, 0f, 3f), Quaternion.Euler(new Vector3(0, -32.89f, 0)));
+            btn.ambientUI = ambient;
         }
         
         btn.render = gary;

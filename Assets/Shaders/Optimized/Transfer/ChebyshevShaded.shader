@@ -12,6 +12,7 @@ Shader "VolumeRendering/Optimized/ChebyshevShaded"
 		_OccupancyDims("Dimensions of the occupancy structure", Vector) = (10, 10, 28)
 		_Quality("Quality factor for amount of sample points", Range(1.0, 5.0)) = 1.0
 		_HighQuality("Hard-coded 256 points or based on dimension", Range(0, 1)) = 1
+		_Ambient("The constant ambient lighting of the volume", Range(0, 1)) = 0.5
 	}
 
 		SubShader
@@ -35,7 +36,7 @@ Shader "VolumeRendering/Optimized/ChebyshevShaded"
 				int3 _VolumeDims, _OccupancyDims;
 				half _Quality;
 				int _HighQuality;
-				float ambient;
+				float _Ambient;
 
 				struct Ray {
 					float3 origin;
@@ -118,14 +119,14 @@ Shader "VolumeRendering/Optimized/ChebyshevShaded"
 					ray.length = length(vdata.t_0 - ray_exit);
 
 
-					// Calculate amount of sample points and step length (with direction)
+					// Calculate amount of sample points and step length (with direction) (Deakin and Knackstedt, eq. 
 					int n = (_HighQuality == 1) ? int(ceil(float(max3(_VolumeDims)) * ray.length * _Quality)) : 256;
 					float3 step_volume = ray.dir * ray.length / (float(n) - 1.0f);
 
-					// This piece of code from Deakin makes performance smoother in some cases.
+					// This piece of code from Deakin makes performance smoother in some cases and avoids crashes.
 					// Deakin's words:
-						// This test fixes a performance regression if view is oriented with edge/s of the volume
-						// perhaps due to precision issues with the bounding box intersection
+						// "This test fixes a performance regression if view is oriented with edge/s of the volume
+						// perhaps due to precision issues with the bounding box intersection"
 					float3 early_exit_test = ray.origin + step_volume;
 					if (any(early_exit_test <= 0) || any(early_exit_test >= 1)) {
 						return half4(0, 0, 0, 0);
@@ -146,13 +147,11 @@ Shader "VolumeRendering/Optimized/ChebyshevShaded"
 
 					bool empty = false;
 
-					ambient = 0.8;
-					float3 lightDir = ray.dir;
+					float3 lightDir = normalize(ray.dir + abs(min(min(ray.dir.x, ray.dir.y), ray.dir.z))); // Force light direction to be positive
+					
 
-					// Test amount of samples
-					//int num_volume_samples = 0;
-					//int num_distance_samples = 0;
-					//
+					bool first = true;
+					float3 localnorm = float3(0, 0, 0);
 
 					[loop]
 					for (int i = 0; i < n; i) {
@@ -161,7 +160,6 @@ Shader "VolumeRendering/Optimized/ChebyshevShaded"
 
 						[branch]
 						if (empty && any(u_int != last_u_int)) {
-							//num_distance_samples++; // Test amount of samples
 							float distance = _DistanceMap.Load(int4(u_int, 0));
 							float distance_u = float(floor(distance * 255));
 							empty = distance > 0;
@@ -169,12 +167,19 @@ Shader "VolumeRendering/Optimized/ChebyshevShaded"
 							i = (empty) ? i + delta_i(delta_i3(step_occupancy, u, step_occupancy_inv, distance_u)) : int(max(i + i_reverse, i_min));
 							currentRayPos = mad(i, step_volume, ray.origin);
 						} else {
-							//num_volume_samples++; // Test amount of samples
 							float4 volumeData = tex3Dlod(_Volume, float4(currentRayPos, 0));
 							float4 src = tex2Dlod(_Transfer, float4(volumeData.a, 0, 0, 0));
 							empty = src.a <= 0;
 
-							src.rgb = src.rgb * (ambient + max(0, dot(volumeData.rgb, lightDir)));
+							// Only consider the first non-empty sample's normal for more realistic surface
+							// REVISIT: Maybe a separate normal map texture that is only sampled in this branch would speed things up memory-wise?
+							/*[branch]
+							if (first && !empty) {
+								localnorm = volumeData.rgb;
+								first = false;
+							}*/
+
+							src.rgb = src.rgb * (_Ambient + max(0, dot(volumeData.rgb, lightDir)));
 
 							last_u_int = (empty) ? last_u_int : u_int;
 
@@ -193,14 +198,10 @@ Shader "VolumeRendering/Optimized/ChebyshevShaded"
 						}
 					}
 
-					// Assuming k_diffuse and light intensity is always 1
-					//dst = dst * (ambient + max(0, dot(normal, lightDir)));
+					// Assuming k_diffuse and light intensity is always 1, and that the light is perfectly white
+					//dst.rgb = dst.rgb * (ambient + max(0, dot(localnorm, lightDir)));
 
 					dst = saturate(dst);
-
-					// Test amount of samples
-					//uint n_steps_max = uint(ceil(max3(_VolumeDims) * sqrt(3.0f)));
-					//dst = float4(float(num_volume_samples) / float(n_steps_max), float(num_distance_samples) / float(n_steps_max), 0, 1); 
 					return dst;
 				}
 			ENDCG

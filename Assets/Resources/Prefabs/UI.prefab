@@ -10835,6 +10835,8 @@ MonoBehaviour:
   highPrecision: 0
   render: {fileID: 1149176535316849556, guid: e6ae4b6bde5da8346bdcef4e3b1eae5f, type: 3}
   speedUI: {fileID: 0}
+  qualityUI: {fileID: 0}
+  ambientUI: {fileID: 0}
   panic: {fileID: 0}
   volumeList: {fileID: 1058046744312298510}
   qualityToggle: {fileID: 4941471761397046108}
@@ -21685,7 +21687,7 @@ MonoBehaviour:
   _currentValue: {fileID: 8507912369949869579}
   _minValue: {fileID: 5832489636511847243}
   _maxValue: {fileID: 6249604215039224501}
-  values: 0100000002000000030000000400000005000000060000000700000008000000
+  values: 02000000030000000400000005000000060000000700000008000000
   floatAccuracy: F0
 --- !u!1 &5034277244918011141
 GameObject:

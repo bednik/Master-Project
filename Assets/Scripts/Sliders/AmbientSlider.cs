@@ -5,7 +5,7 @@ using UnityEngine.EventSystems;
 using Microsoft.MixedReality.Toolkit.UI;
 using VolumeRendering.UI;
 
-public class SpeedSlider : MonoBehaviour
+public class AmbientSlider : MonoBehaviour
 {
     VolumeRenderController volumeRenderer;
 
@@ -16,6 +16,6 @@ public class SpeedSlider : MonoBehaviour
         PinchSlider slider = gameObject.GetComponent<PinchSlider>();
         SimpleSliderBehaviour sliderClamped = gameObject.GetComponent<SimpleSliderBehaviour>();
 
-        slider.OnValueUpdated.AddListener((eventdata) => { volumeRenderer.delay = sliderClamped.CurrentValue; });
+        slider.OnValueUpdated.AddListener((eventdata) => { volumeRenderer.UpdateAmbient(sliderClamped.CurrentValue); });
     }
 }
