@@ -18,9 +18,6 @@ namespace VolumeRendering.UI
 
         public int CurrentValue { get; private set; }
 
-        [SerializeField]
-        private string floatAccuracy = "F0";
-
         void Awake()
         {
             Debug.Assert(values != null, "Values textMesh is not set up in SimpleSliderBehaviour on " + gameObject.name);

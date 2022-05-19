@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEditor;
 using System.Collections;
 using System.IO;
+using System.Collections.Generic;
 
 public class CTTextureBuilder : EditorWindow
 {
@@ -34,9 +35,10 @@ public class CTTextureBuilder : EditorWindow
             return;
         }
 
+        //int realDepth = depth + 4 - (depth % 4);
         int textureSize = width * height * depth;
 
-        Texture3D density = new Texture3D(width, height, depth, TextureFormat.R16, false);
+        Texture3D density = new Texture3D(width, height, depth, TextureFormat.R8, false);
 
         density.wrapMode = TextureWrapMode.Clamp;
         density.filterMode = FilterMode.Bilinear;
@@ -44,14 +46,13 @@ public class CTTextureBuilder : EditorWindow
 
         int min = short.MaxValue;
         int max = short.MinValue;
-        long sum = 0;
 
         // TODO: For larger textures, make a tiled version (i.e. take n rows at a time)
         using (var stream = new FileStream(inputPath, FileMode.Open))
         {
             var len = stream.Length;
 
-            ushort[] colors = new ushort[textureSize];
+            byte[] colors = new byte[textureSize];
 
             // Hallo, Bendik from May 2022 here. This is tuned for a volume with values between -1000 and ~3000
             // For a volume consisting of only byte values, use an R8 texture and byte values instead of shorts (and only read one byte)
@@ -63,7 +64,7 @@ public class CTTextureBuilder : EditorWindow
                 byte lower = (byte)stream.ReadByte();
                 byte higher = (byte)stream.ReadByte();
                 short val = (short)(lower + (higher << 8));
-                colors[i] = (ushort)((val + 1024)*16);
+                colors[i] = (byte)((val + 1024)/16);
                 min = (val < min) ? val : min;
                 max = (val > max) ? val : max;
             }
@@ -72,10 +73,62 @@ public class CTTextureBuilder : EditorWindow
             density.Apply();
         }
 
+
+
+        //Graphics.CopyTexture(density, storeTex);
+
+        // https://forum.unity.com/threads/texture3d-compression-issue.966494/
+        List<Texture2D> layers = new List<Texture2D>();
+        for (int z = 0; z < depth; z++)
+        {
+            Texture2D t = new Texture2D(width, height, TextureFormat.R8, false);
+            Graphics.CopyTexture(density, z, 0, 0, 0, width, height, t, 0, 0, 0, 0);
+            EditorUtility.CompressTexture(t, TextureFormat.BC4, TextureCompressionQuality.Best);
+            layers.Add(t);
+        }
+
+        List<byte> res = new List<byte>();
+        for (int z = 0; z < depth; z++)
+        {
+            var tex2DData = layers[z].GetRawTextureData<byte>();
+
+            for (int i = 0; i < tex2DData.Length; i++)
+            {
+                res.Add(tex2DData[i]);
+            }
+        }
+
+        Texture3D storeTex = new Texture3D(width, height, depth, TextureFormat.BC4, false)
+        {
+            wrapMode = TextureWrapMode.Clamp,
+            filterMode = FilterMode.Bilinear,
+            anisoLevel = 0
+        };
+        storeTex.SetPixelData(res.ToArray(), 0);
+        storeTex.Apply();
+
+       
+        /*Texture2D temp;
+
+        for (int z = 0; z < depth; z++)
+        {
+            temp = new Texture2D(width, height, TextureFormat.R8, false)
+            {
+                wrapMode = TextureWrapMode.Clamp,
+                filterMode = FilterMode.Bilinear,
+                anisoLevel = 0
+            };
+            Graphics.CopyTexture(density, z, 0, 0, 0, width, height, temp, 0, 0, 0, 0);
+            EditorUtility.CompressTexture(temp, TextureFormat.BC4, TextureCompressionQuality.Best);
+            Graphics.CopyTexture(temp, 0, 0, 0, 0, width, height, storeTex, z, 0, 0, 0);
+        }*/
+
+        //Graphics.CopyTexture(density, storeTex);
+
         Debug.Log(min);
         Debug.Log(max);
 
-        AssetDatabase.CreateAsset(density, outputPath);
+        AssetDatabase.CreateAsset(storeTex, outputPath);
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
     }

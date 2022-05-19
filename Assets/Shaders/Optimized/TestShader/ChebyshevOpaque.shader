@@ -1,7 +1,3 @@
-// Upgrade NOTE: replaced 'UNITY_INSTANCE_ID' with 'UNITY_VERTEX_INPUT_INSTANCE_ID'
-
-// Upgrade NOTE: replaced 'UNITY_INSTANCE_ID' with 'UNITY_VERTEX_INPUT_INSTANCE_ID'
-
 // Deakin and Knackstead: https://link.springer.com/article/10.1007/s41095-019-0155-y
 Shader "VolumeRendering/Optimized/Testshader/Opaque"
 {
@@ -30,6 +26,8 @@ Shader "VolumeRendering/Optimized/Testshader/Opaque"
 				CGPROGRAM
 				#pragma vertex vert
 				#pragma fragment frag
+				#pragma multi_compile_instancing
+				#include "UnityCG.cginc"
 
 				sampler3D _Volume;
 				Texture3D _DistanceMap;
@@ -102,9 +100,11 @@ Shader "VolumeRendering/Optimized/Testshader/Opaque"
 				v2f vert(vertexData v)
 				{
 					v2f o;
+
 					UNITY_SETUP_INSTANCE_ID(v);
 					UNITY_TRANSFER_INSTANCE_ID(v, o);
 					UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
+
 					o.vertex = UnityObjectToClipPos(v.pos);
 					o.uv = v.uv;
 					o.t_0 = v.pos.xyz + 0.5;
@@ -113,10 +113,6 @@ Shader "VolumeRendering/Optimized/Testshader/Opaque"
 					return o;
 				}
 
-				UNITY_DECLARE_SCREENSPACE_TEXTURE(_Volume);
-				UNITY_DECLARE_SCREENSPACE_TEXTURE(_Transfer);
-				UNITY_DECLARE_SCREENSPACE_TEXTURE(_DistanceMap);
-
 
 				// Fragment kernel //
 				// This fragment shader is heavily inspired by Lachlan Deakin's shader at https://github.com/LDeakin/VkVolume/blob/master/shaders/volume_render.frag
@@ -124,6 +120,7 @@ Shader "VolumeRendering/Optimized/Testshader/Opaque"
 				min16float4 frag(v2f vdata) : SV_Target
 				{
 					UNITY_SETUP_INSTANCE_ID(vdata);
+					UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(vdata);
 					// Determine ray direction and length
 					//discard;
 					Ray ray;
@@ -183,8 +180,8 @@ Shader "VolumeRendering/Optimized/Testshader/Opaque"
 							currentRayPos = mad(i, step_volume, ray.origin);
 						} else {
 							//num_volume_samples++; // Test amount of samples
-							min16float density = UNITY_SAMPLE_SCREENSPACE_TEXTURE(_Volume, u);
-							min16float4 src = UNITY_SAMPLE_SCREENSPACE_TEXTURE(_Transfer, density);
+							float density = tex3Dlod(_Volume, float4(currentRayPos, 0));
+							float4 src = tex2Dlod(_Transfer, float4(density, 0, 0, 0));
 							empty = src.a <= 0;
 
 							last_u_int = (empty) ? last_u_int : u_int;

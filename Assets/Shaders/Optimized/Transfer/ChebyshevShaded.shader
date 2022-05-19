@@ -1,5 +1,5 @@
 // Deakin and Knackstead: https://link.springer.com/article/10.1007/s41095-019-0155-y
-Shader "VolumeRendering/Optimized/ChebyshevShaded"
+Shader "VolumeRendering/Optimized/ChebyshevDuo"
 {
 	Properties
 	{
@@ -26,6 +26,8 @@ Shader "VolumeRendering/Optimized/ChebyshevShaded"
 				CGPROGRAM
 				#pragma vertex vert
 				#pragma fragment frag
+				#pragma multi_compile_instancing
+				#include "UnityCG.cginc"
 
 				sampler3D _Volume;
 				Texture3D _DistanceMap;
@@ -48,6 +50,7 @@ Shader "VolumeRendering/Optimized/ChebyshevShaded"
 				{
 					float4 pos : POSITION;
 					float2 uv : TEXCOORD0;
+					UNITY_VERTEX_INPUT_INSTANCE_ID
 				};
 
 				struct v2f
@@ -57,6 +60,8 @@ Shader "VolumeRendering/Optimized/ChebyshevShaded"
 					float3 world : TEXCOORD1;
 					float3 local : TEXCOORD2;
 					float3 t_0 : TEXCOORD3;
+					UNITY_VERTEX_INPUT_INSTANCE_ID
+					UNITY_VERTEX_OUTPUT_STEREO
 				};
 
 				// Adapted from https://stackoverflow.com/questions/28006184/get-component-wise-maximum-of-vector-in-glsl
@@ -85,7 +90,7 @@ Shader "VolumeRendering/Optimized/ChebyshevShaded"
 
 				// Equation 14 (Deakin and Knackstead)
 				int3 delta_i3(float3 delta_u, float3 u, float3 delta_u_inv, half dist) {
-					return int3(ceil(((-delta_u > 0) + sign(delta_u) * dist + floor(u) - u) * delta_u_inv));
+					return int3(ceil(((-delta_u > 0) + mad(sign(delta_u), dist, floor(u)) - u) * delta_u_inv));
 				}
 
 				// Equation 9 (Deakin and Knackstead)
@@ -97,6 +102,11 @@ Shader "VolumeRendering/Optimized/ChebyshevShaded"
 				v2f vert(vertexData v)
 				{
 					v2f o;
+
+					UNITY_SETUP_INSTANCE_ID(v);
+					UNITY_TRANSFER_INSTANCE_ID(v, o);
+					UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
+
 					o.vertex = UnityObjectToClipPos(v.pos);
 					o.uv = v.uv;
 					o.t_0 = v.pos.xyz + 0.5;
@@ -110,8 +120,9 @@ Shader "VolumeRendering/Optimized/ChebyshevShaded"
 				// Modifications have been made to make it work with my software architecture, as well as follow my own style
 				half4 frag(v2f vdata) : SV_Target
 				{
+					UNITY_SETUP_INSTANCE_ID(vdata);
+					UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(vdata);
 					// Determine ray direction and length
-					//discard;
 					Ray ray;
 					ray.origin = vdata.t_0;
 					ray.dir = normalize(mul(unity_WorldToObject, vdata.world - _WorldSpaceCameraPos));
@@ -148,7 +159,7 @@ Shader "VolumeRendering/Optimized/ChebyshevShaded"
 					bool empty = false;
 
 					float3 lightDir = normalize(ray.dir + abs(min(min(ray.dir.x, ray.dir.y), ray.dir.z))); // Force light direction to be positive
-					
+
 
 					bool first = true;
 					float3 localnorm = float3(0, 0, 0);
@@ -171,14 +182,6 @@ Shader "VolumeRendering/Optimized/ChebyshevShaded"
 							float4 src = tex2Dlod(_Transfer, float4(volumeData.a, 0, 0, 0));
 							empty = src.a <= 0;
 
-							// Only consider the first non-empty sample's normal for more realistic surface
-							// REVISIT: Maybe a separate normal map texture that is only sampled in this branch would speed things up memory-wise?
-							/*[branch]
-							if (first && !empty) {
-								localnorm = volumeData.rgb;
-								first = false;
-							}*/
-
 							src.rgb = src.rgb * (_Ambient + max(0, dot(volumeData.rgb, lightDir)));
 
 							last_u_int = (empty) ? last_u_int : u_int;
@@ -198,13 +201,10 @@ Shader "VolumeRendering/Optimized/ChebyshevShaded"
 						}
 					}
 
-					// Assuming k_diffuse and light intensity is always 1, and that the light is perfectly white
-					//dst.rgb = dst.rgb * (ambient + max(0, dot(localnorm, lightDir)));
-
 					dst = saturate(dst);
 					return dst;
 				}
-			ENDCG
+				ENDCG
 			}
 		}
 }

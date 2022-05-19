@@ -26,6 +26,8 @@ Shader "VolumeRendering/Optimized/ERT"
 				CGPROGRAM
 				#pragma vertex vert
 				#pragma fragment frag
+				#pragma multi_compile_instancing
+				#include "UnityCG.cginc"
 
 				sampler3D _Volume;
 				sampler2D _Transfer;
@@ -46,6 +48,7 @@ Shader "VolumeRendering/Optimized/ERT"
 				{
 					float4 pos : POSITION;
 					float2 uv : TEXCOORD0;
+					UNITY_VERTEX_INPUT_INSTANCE_ID
 				};
 
 				struct v2f
@@ -55,6 +58,8 @@ Shader "VolumeRendering/Optimized/ERT"
 					float3 world : TEXCOORD1;
 					float3 local : TEXCOORD2;
 					float3 t_0 : TEXCOORD3;
+					UNITY_VERTEX_INPUT_INSTANCE_ID
+					UNITY_VERTEX_OUTPUT_STEREO
 				};
 
 				// Adapted from https://stackoverflow.com/questions/28006184/get-component-wise-maximum-of-vector-in-glsl
@@ -107,6 +112,11 @@ Shader "VolumeRendering/Optimized/ERT"
 				v2f vert(vertexData v)
 				{
 					v2f o;
+
+					UNITY_SETUP_INSTANCE_ID(v);
+					UNITY_TRANSFER_INSTANCE_ID(v, o);
+					UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
+
 					o.vertex = UnityObjectToClipPos(v.pos);
 					o.uv = v.uv;
 					o.t_0 = v.pos.xyz + 0.5;
@@ -118,6 +128,9 @@ Shader "VolumeRendering/Optimized/ERT"
 				// Fragment kernel //
 				half4 frag(v2f vdata) : SV_Target
 				{
+					UNITY_SETUP_INSTANCE_ID(vdata);
+					UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(vdata);
+
 					// Determine ray direction and length
                     Ray ray;
 					ray.origin = vdata.t_0;
@@ -146,9 +159,8 @@ Shader "VolumeRendering/Optimized/ERT"
 					[loop]
 					for (half iter = 0; iter < n; iter++)
 					{
-						// Sample the texture and set the value to 0 if it is outside the slice or not within the value thresholds
-						float density = tex3D(_Volume, currentRayPos);
-						half4 src = tex2D(_Transfer, density);
+						float density = tex3Dlod(_Volume, float4(currentRayPos, 0));
+						float4 src = tex2Dlod(_Transfer, float4(density, 0, 0, 0));
 
 						oneMinusAlpha = 1 - dst.a;
 						dst.a = mad(src.a, oneMinusAlpha, dst.a);

@@ -4323,9 +4323,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: 'Chebyshev shaded
-
-    (Not implemented)'
+  m_text: Chebyshev shaded
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 6a84f857bec7e7345843ae29404c57ce, type: 2}
   m_sharedMaterial: {fileID: 21202819797275496, guid: 6a84f857bec7e7345843ae29404c57ce, type: 2}
@@ -6383,7 +6381,7 @@ TextMesh:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 3342249501496712798}
-  m_Text: Dummy big thorax
+  m_Text: Test thorax
   m_OffsetZ: 0
   m_CharacterSize: 1
   m_LineSpacing: 1
@@ -10855,7 +10853,7 @@ MonoBehaviour:
   - {fileID: 4800000, guid: 034ad3f8548bbf146b24c7821e1f568a, type: 3}
   - {fileID: 4800000, guid: 9e7883460f5beec459dc6b6fff874ec6, type: 3}
   - {fileID: 4800000, guid: ec37b46121e8b8a45b554b017d14b656, type: 3}
-  - {fileID: 4800000, guid: 41bbc43bcd425fc43b9224880663bb84, type: 3}
+  - {fileID: 4800000, guid: c29b4b6eb221be649a66f6c8bd8ca4e2, type: 3}
   - {fileID: 4800000, guid: eb254aa99833b9a45bb17815e403c58d, type: 3}
 --- !u!1 &4516058337930371999
 GameObject:
@@ -11019,7 +11017,7 @@ TextMesh:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 4516058337931585746}
-  m_Text: MR-Default
+  m_Text: Pig
   m_OffsetZ: 0
   m_CharacterSize: 1
   m_LineSpacing: 1
@@ -22610,7 +22608,7 @@ GameObject:
   - component: {fileID: 323713214248256221}
   - component: {fileID: 2954385373045272472}
   m_Layer: 5
-  m_Name: Chebyshev Morton (not implemented)
+  m_Name: Chebyshev Two eyes
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -24995,9 +24993,9 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: 'Chebyshev Morton
+  m_text: 'Chebyshev
 
-    (Not implemented)'
+    Both eyes'
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 6a84f857bec7e7345843ae29404c57ce, type: 2}
   m_sharedMaterial: {fileID: 21202819797275496, guid: 6a84f857bec7e7345843ae29404c57ce, type: 2}

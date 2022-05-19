@@ -721,7 +721,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 1
     m_VerticalOverflow: 1
     m_LineSpacing: 1
-  m_Text: Block size
+  m_Text: Seconds
 --- !u!1 &2472564709670014470
 GameObject:
   m_ObjectHideFlags: 0
@@ -2349,7 +2349,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8ae2c969cac55f34686f7eb235885c59, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  minMaxValue: {x: 0.01, y: 1}
+  minMaxValue: {x: 0.001, y: 0.1}
   _currentValue: {fileID: 8871361401530414855}
   _minValue: {fileID: 6790544198349864997}
   _maxValue: {fileID: 8763718576090085998}

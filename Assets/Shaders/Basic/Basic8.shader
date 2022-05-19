@@ -156,7 +156,7 @@ Shader "VolumeRendering/Basic/Basic8"
 					for (int iter = 0; iter < n; iter++)
 					{
 						// Sample the texture and set the value to 0 if it is outside the slice or not within the value thresholds
-						float src = tex3D(_Volume, currentRayPos);
+						float src = tex3Dlod(_Volume, float4(currentRayPos, 0));;
 
 						// Get the alpha directly from the texture, set the color by blending
 						oneMinusAlpha = 1 - prev_alpha;

@@ -26,6 +26,8 @@ Shader "VolumeRendering/Optimized/OccupancyMap"
 				CGPROGRAM
 				#pragma vertex vert
 				#pragma fragment frag
+				#pragma multi_compile_instancing
+				#include "UnityCG.cginc"
 
 				sampler3D _Volume;
 				Texture3D _OccupancyMap;
@@ -47,6 +49,7 @@ Shader "VolumeRendering/Optimized/OccupancyMap"
 				{
 					float4 pos : POSITION;
 					float2 uv : TEXCOORD0;
+					UNITY_VERTEX_INPUT_INSTANCE_ID
 				};
 
 				struct v2f
@@ -56,6 +59,8 @@ Shader "VolumeRendering/Optimized/OccupancyMap"
 					float3 world : TEXCOORD1;
 					float3 local : TEXCOORD2;
 					float3 t_0 : TEXCOORD3;
+					UNITY_VERTEX_INPUT_INSTANCE_ID
+					UNITY_VERTEX_OUTPUT_STEREO
 				};
 
 				// Adapted from https://stackoverflow.com/questions/28006184/get-component-wise-maximum-of-vector-in-glsl
@@ -101,6 +106,11 @@ Shader "VolumeRendering/Optimized/OccupancyMap"
 				v2f vert(vertexData v)
 				{
 					v2f o;
+
+					UNITY_SETUP_INSTANCE_ID(v);
+					UNITY_TRANSFER_INSTANCE_ID(v, o);
+					UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
+
 					o.vertex = UnityObjectToClipPos(v.pos);
 					o.uv = v.uv;
 					o.t_0 = v.pos.xyz + 0.5;
@@ -114,6 +124,9 @@ Shader "VolumeRendering/Optimized/OccupancyMap"
 				// Modifications have been made to make it work with my software architecture, as well as follow my own style
 				fixed4 frag(v2f vdata) : SV_Target
 				{
+					UNITY_SETUP_INSTANCE_ID(vdata);
+					UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(vdata);
+
 					// Determine ray direction and length
                     Ray ray;
 					ray.origin = vdata.t_0;

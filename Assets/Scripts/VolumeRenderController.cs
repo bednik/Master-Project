@@ -161,8 +161,9 @@ public class VolumeRenderController : MonoBehaviour
 
     private void Start()
     {
+        Resources.UnloadUnusedAssets();
         dims = new int[3] { Mathf.CeilToInt((float)m_volume.width / m_blockSize), Mathf.CeilToInt((float)m_volume.height / m_blockSize), Mathf.CeilToInt((float)m_volume.depth / m_blockSize) };
-        material = GetComponent<Renderer>().material;
+        material = GetComponent<Renderer>().sharedMaterial;
 
         byteToFloat = new Texture2D(256, 1, TextureFormat.R8, false)
         {
@@ -212,12 +213,9 @@ public class VolumeRenderController : MonoBehaviour
             anisoLevel = 0
         };
         normalStoreTex.Apply();
-
-        //cs_occ = (ComputeShader)Resources.Load("ComputeShaders/UniformSubdivision");
-        //cs = (ComputeShader)Resources.Load("ComputeShaders/Chebyshev");
     }
 
-    private void FixedUpdate()
+    private void Update()
     {
         if (volumeType == VolumeType.US && ready)
         {
@@ -228,13 +226,11 @@ public class VolumeRenderController : MonoBehaviour
 
     public void UpdateQuality(float value)
     {
-        Debug.Log("TestQuality");
         material.SetFloat("_Quality", value);
     }
 
     public void UpdateAmbient(float value)
     {
-        Debug.Log("TestAmbient");
         material.SetFloat("_Ambient", value);
     }
 }

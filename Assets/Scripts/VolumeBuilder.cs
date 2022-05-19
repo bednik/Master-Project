@@ -674,7 +674,7 @@ public class VolumeBuilder : MonoBehaviour
         
         btn.render = gary;
         Transform transform_g = gary.GetComponent<Transform>();
-        gary.GetComponent<MeshRenderer>().material = material;
+        gary.GetComponent<MeshRenderer>().sharedMaterial = material;
 
         VolumeRenderController controller = gary.GetComponent<VolumeRenderController>();
         controller.USVol = USVol;
@@ -760,7 +760,8 @@ public class VolumeBuilder : MonoBehaviour
             emptySpaceSkipMethod = EmptySpaceSkipMethod.CHEBYSHEV;
         }
 
-        shaded = shaderIndex == 11;
+        shaded = shaderIndex >= 10;
+        material.enableInstancing = true;
     }
 
     public void UpdateERT()
@@ -838,8 +839,8 @@ public class VolumeBuilder : MonoBehaviour
             case 8:
                 volumeType = VolumeType.CT;
                 scale = new Vector3(0.286f, 0.286f, 0.620f);
-                highPrecision = true;
-                req = Resources.LoadAsync("VolumeTextures/CT/thorax16");
+                highPrecision = false;
+                req = Resources.LoadAsync("VolumeTextures/CT/thoraxtest");
                 break;
             default:
                 volumeType = VolumeType.CT;
