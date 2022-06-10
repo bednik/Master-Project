@@ -34,6 +34,8 @@ public class VolumeRenderController : MonoBehaviour
     public bool shaded = false;
     public ComputeShader cs, cs_occ;
 
+    public int numUS = 11;
+
     private int[] dims;
 
     public float delay = 0.1f;
@@ -130,7 +132,7 @@ public class VolumeRenderController : MonoBehaviour
 
     private IEnumerator updateUS()
     {
-        if (currentTex >= 11)
+        if (currentTex >= numUS)
         {
             currentTex = 1;
         }
@@ -162,57 +164,66 @@ public class VolumeRenderController : MonoBehaviour
     private void Start()
     {
         Resources.UnloadUnusedAssets();
-        dims = new int[3] { Mathf.CeilToInt((float)m_volume.width / m_blockSize), Mathf.CeilToInt((float)m_volume.height / m_blockSize), Mathf.CeilToInt((float)m_volume.depth / m_blockSize) };
-        material = GetComponent<Renderer>().sharedMaterial;
-
-        byteToFloat = new Texture2D(256, 1, TextureFormat.R8, false)
+        if (volumeType == VolumeType.US)
         {
-            wrapMode = TextureWrapMode.Clamp,
-            filterMode = FilterMode.Point,
-            anisoLevel = 0
-        };
+            if (emptySpaceSkip)
+            {
+                dims = new int[3] { Mathf.CeilToInt((float)m_volume.width / m_blockSize), Mathf.CeilToInt((float)m_volume.height / m_blockSize), Mathf.CeilToInt((float)m_volume.depth / m_blockSize) };
+                material = GetComponent<Renderer>().sharedMaterial;
 
-        byte[] bytes = new byte[256];
-        for (int i = 0; i < 256; i++)
-        {
-            bytes[i] = (byte)i;
+                byteToFloat = new Texture2D(256, 1, TextureFormat.R8, false)
+                {
+                    wrapMode = TextureWrapMode.Clamp,
+                    filterMode = FilterMode.Point,
+                    anisoLevel = 0
+                };
+
+                byte[] bytes = new byte[256];
+                for (int i = 0; i < 256; i++)
+                {
+                    bytes[i] = (byte)i;
+                }
+                byteToFloat.SetPixelData<byte>(bytes, 0);
+                byteToFloat.Apply();
+
+                outMap = new RenderTexture(dims[0], dims[1], 0, RenderTextureFormat.R8)
+                {
+                    dimension = UnityEngine.Rendering.TextureDimension.Tex3D,
+                    volumeDepth = dims[2],
+                    enableRandomWrite = true,
+                    filterMode = FilterMode.Point
+                };
+                outMap.Create();
+
+                storeTex = new Texture3D(dims[0], dims[1], dims[2], TextureFormat.R8, false)
+                {
+                    wrapMode = TextureWrapMode.Clamp,
+                    filterMode = FilterMode.Point,
+                    anisoLevel = 0
+                };
+                storeTex.Apply();
+            }
+
+            if (shaded)
+            {
+                normalMapper = new RenderTexture(m_volume.width, m_volume.height, 0, RenderTextureFormat.ARGB32)
+                {
+                    dimension = UnityEngine.Rendering.TextureDimension.Tex3D,
+                    volumeDepth = m_volume.depth,
+                    enableRandomWrite = true,
+                    filterMode = FilterMode.Bilinear
+                };
+                normalMapper.Create();
+
+                normalStoreTex = new Texture3D(m_volume.width, m_volume.height, m_volume.depth, TextureFormat.RGBA32, false)
+                {
+                    wrapMode = TextureWrapMode.Clamp,
+                    filterMode = FilterMode.Bilinear,
+                    anisoLevel = 0
+                };
+                normalStoreTex.Apply();
+            }
         }
-        byteToFloat.SetPixelData<byte>(bytes, 0);
-        byteToFloat.Apply();
-
-        outMap = new RenderTexture(dims[0], dims[1], 0, RenderTextureFormat.R8)
-        {
-            dimension = UnityEngine.Rendering.TextureDimension.Tex3D,
-            volumeDepth = dims[2],
-            enableRandomWrite = true,
-            filterMode = FilterMode.Point
-        };
-        outMap.Create();
-
-        storeTex = new Texture3D(dims[0], dims[1], dims[2], TextureFormat.R8, false)
-        {
-            wrapMode = TextureWrapMode.Clamp,
-            filterMode = FilterMode.Point,
-            anisoLevel = 0
-        };
-        storeTex.Apply();
-
-        normalMapper = new RenderTexture(m_volume.width, m_volume.height, 0, RenderTextureFormat.ARGB32)
-        {
-            dimension = UnityEngine.Rendering.TextureDimension.Tex3D,
-            volumeDepth = m_volume.depth,
-            enableRandomWrite = true,
-            filterMode = FilterMode.Bilinear
-        };
-        normalMapper.Create();
-
-        normalStoreTex = new Texture3D(m_volume.width, m_volume.height, m_volume.depth, TextureFormat.RGBA32, false)
-        {
-            wrapMode = TextureWrapMode.Clamp,
-            filterMode = FilterMode.Bilinear,
-            anisoLevel = 0
-        };
-        normalStoreTex.Apply();
     }
 
     private void Update()

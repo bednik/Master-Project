@@ -4,6 +4,7 @@ using System.Collections;
 using NumSharp;
 using System.IO;
 using System;
+using System.Collections.Generic;
 
 
 public class USTextureBuilder : EditorWindow
@@ -63,9 +64,39 @@ public class USTextureBuilder : EditorWindow
         density.SetPixelData(densityVals, 0);
         density.Apply();
 
+        // https://forum.unity.com/threads/texture3d-compression-issue.966494/
+        List<Texture2D> layers = new List<Texture2D>();
+        for (int z = 0; z < depth; z++)
+        {
+            Texture2D t = new Texture2D(width, height, TextureFormat.R8, false);
+            Graphics.CopyTexture(density, z, 0, 0, 0, width, height, t, 0, 0, 0, 0);
+            EditorUtility.CompressTexture(t, TextureFormat.BC4, TextureCompressionQuality.Best);
+            layers.Add(t);
+        }
+
+        List<byte> res = new List<byte>();
+        for (int z = 0; z < depth; z++)
+        {
+            var tex2DData = layers[z].GetRawTextureData<byte>();
+
+            for (int i = 0; i < tex2DData.Length; i++)
+            {
+                res.Add(tex2DData[i]);
+            }
+        }
+
+        Texture3D storeTex = new Texture3D(width, height, depth, TextureFormat.BC4, false)
+        {
+            wrapMode = TextureWrapMode.Clamp,
+            filterMode = FilterMode.Bilinear,
+            anisoLevel = 0
+        };
+        storeTex.SetPixelData(res.ToArray(), 0);
+        storeTex.Apply();
+
         Debug.Log("Finished generating texture at " + outputPath);
 
-        AssetDatabase.CreateAsset(density, outputPath);
+        AssetDatabase.CreateAsset(storeTex, outputPath);
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
     }

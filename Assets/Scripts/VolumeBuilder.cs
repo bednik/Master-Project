@@ -33,6 +33,7 @@ public class VolumeBuilder : MonoBehaviour
     private int highQuality = 0;
     private string USVol = "A6";
     private bool shaded = false;
+    private int numUS = 11;
 
     [SerializeField] InteractableToggleCollection volumeList;
     [SerializeField] InteractableToggleCollection qualityToggle;
@@ -346,144 +347,6 @@ public class VolumeBuilder : MonoBehaviour
 
     #region Empty space skipping
 
-    [BurstCompile(CompileSynchronously = true)]
-    struct UniformJob : IJobFor
-    {
-        [WriteOnly] public NativeArray<byte> textureData;
-
-        [ReadOnly] public NativeArray<byte> volume;
-        [ReadOnly] public NativeArray<int> originalDims;
-        [ReadOnly] public NativeArray<int> dims;
-        [ReadOnly] public int blockSize;
-        [ReadOnly] public NativeArray<byte> transferFunction;
-
-        public void Execute(int index)
-        {
-            int temp = index;
-
-            int minZ = temp / (dims[0] * dims[1]);
-            temp -= minZ * dims[0] * dims[1];
-
-            int minY = temp / dims[0];
-            temp -= minY * dims[0];
-
-            int minX = temp;
-
-            Vector3 min = new Vector3(minX * blockSize, minY * blockSize, minZ * blockSize);
-            Vector3 max = min + new Vector3(blockSize, blockSize, blockSize);
-
-            //byte minVal = 255;
-            //byte maxVal = 0;
-            bool empty = true;
-
-            for (int z = (int)min.z; z < (int)max.z; z++)
-            {
-                if (z >= originalDims[2]) break;
-
-                for (int y = (int)min.y; y < (int)max.y; y++)
-                {
-                    if (y >= originalDims[1]) break;
-
-                    for (int x = (int)min.x; x < (int)max.x; x++)
-                    {
-                        if (x >= originalDims[0]) break;
-
-                        byte elem = volume[x + y * originalDims[0] + z * originalDims[0] * originalDims[1]];
-
-                        //minVal = (elem < minVal) ? elem : minVal;
-                        //maxVal = (elem > maxVal) ? elem : maxVal;
-
-                        if (empty)
-                        {
-                            byte alpha = transferFunction[elem*4 + 3];
-                            // The subvolume is empty the alpha is zero
-                            empty = alpha == 0;
-                        }
-
-                        // Break out of the loop if we reach minimum minVal AND maximum maxVal
-                        if (!empty)
-                        {
-                            y = (int)max.y;
-                            z = (int)max.z;
-                            break;
-                        }
-                    }
-                }
-            }
-
-            textureData[index] = (empty) ? (byte)0 : (byte)255;
-        }
-    }
-
-    [BurstCompile(CompileSynchronously = true)]
-    struct OccupancyHigh : IJobFor
-    {
-        [WriteOnly] public NativeArray<byte> textureData;
-
-        [ReadOnly] public NativeArray<ushort> volume;
-        [ReadOnly] public NativeArray<int> originalDims;
-        [ReadOnly] public NativeArray<int> dims;
-        [ReadOnly] public int blockSize;
-        [ReadOnly] public NativeArray<byte> transferFunction;
-
-        public void Execute(int index)
-        {
-            int temp = index;
-
-            int minZ = temp / (dims[0] * dims[1]);
-            temp -= minZ * dims[0] * dims[1];
-
-            int minY = temp / dims[0];
-            temp -= minY * dims[0];
-
-            int minX = temp;
-
-            Vector3 min = new Vector3(minX * blockSize, minY * blockSize, minZ * blockSize);
-            Vector3 max = min + new Vector3(blockSize, blockSize, blockSize);
-
-            //byte minVal = 255;
-            //byte maxVal = 0;
-            bool empty = true;
-
-            for (int z = (int)min.z; z < (int)max.z; z++)
-            {
-                if (z >= originalDims[2]) break;
-
-                for (int y = (int)min.y; y < (int)max.y; y++)
-                {
-                    if (y >= originalDims[1]) break;
-
-                    for (int x = (int)min.x; x < (int)max.x; x++)
-                    {
-                        if (x >= originalDims[0]) break;
-
-                        ushort elem = volume[x + y * originalDims[0] + z * originalDims[0] * originalDims[1]];
-
-                        //minVal = (elem < minVal) ? elem : minVal;
-                        //maxVal = (elem > maxVal) ? elem : maxVal;
-
-                        if (empty)
-                        {
-                            byte alpha = transferFunction[(elem+1023) * 4 + 3];
-                            // The subvolume is empty the alpha is zero
-                            empty = alpha == 0;
-                        }
-
-                        // Break out of the loop if we reach minimum minVal AND maximum maxVal
-                        if (!empty)
-                        {
-                            y = (int)max.y;
-                            z = (int)max.z;
-                            break;
-                        }
-                    }
-                }
-            }
-
-            textureData[index] = (empty) ? (byte)0 : (byte)255;
-        }
-    }
-
     IEnumerator UniformSubdivision(Material material)
     {
         ComputeShader cs = (ComputeShader)Resources.Load("ComputeShaders/UniformSubdivision");
@@ -590,11 +453,11 @@ public class VolumeBuilder : MonoBehaviour
         // Copy to normal texture, release rendertexture
         Graphics.CopyTexture(outMap, storeTex);
         yield return null;
-        material.SetTexture("_DistanceMap", storeTex);
+        //material.SetTexture("_DistanceMap", storeTex);
 
         //////// TRANSFORM 2 ////////
         kernelHandle = cs.FindKernel("Trans2");
-        cs.SetTexture(kernelHandle, "InMap", (Texture3D)material.GetTexture("_DistanceMap"));
+        cs.SetTexture(kernelHandle, "InMap", storeTex);
         cs.SetTexture(kernelHandle, "OutMap", outMap, 0);
         cs.SetTexture(kernelHandle, "ByteToFloat", byteToFloat, 0);
         cs.Dispatch(kernelHandle, Mathf.CeilToInt((float)dims[0] / 8), 1, Mathf.CeilToInt((float)dims[2] / 8));
@@ -606,12 +469,12 @@ public class VolumeBuilder : MonoBehaviour
         Graphics.CopyTexture(outMap, storeTex);
         yield return null;
 
-        material.SetTexture("_DistanceMap", storeTex);
+        //material.SetTexture("_DistanceMap", storeTex);
 
         //////// TRANSFORM 3 ////////
 
         kernelHandle = cs.FindKernel("Trans3");
-        cs.SetTexture(kernelHandle, "InMap", (Texture3D)material.GetTexture("_DistanceMap"));
+        cs.SetTexture(kernelHandle, "InMap", storeTex);
         cs.SetTexture(kernelHandle, "OutMap", outMap, 0);
         cs.SetTexture(kernelHandle, "ByteToFloat", byteToFloat, 0);
         cs.Dispatch(kernelHandle, Mathf.CeilToInt((float)dims[0] / 8), Mathf.CeilToInt((float)dims[1] / 8), 1);
@@ -685,6 +548,7 @@ public class VolumeBuilder : MonoBehaviour
         controller.transferFunction = transferFunction;
         controller.m_blockSize = m_blockSize;
         controller.shaded = shaded;
+        controller.numUS = numUS;
 
         transform_g.localScale = (volumeType == VolumeType.CT) ? scale : new Vector3(m_volume.width, m_volume.height, m_volume.depth) / 1000;
         Destroy(transform.parent.gameObject);
@@ -793,18 +657,21 @@ public class VolumeBuilder : MonoBehaviour
             case 0:
                 volumeType = VolumeType.US;
                 USVol = "A6";
+                numUS = 11;
                 highPrecision = false;
                 req = Resources.LoadAsync("VolumeTextures/US/A6/vol01");
                 break;
             case 1:
                 volumeType = VolumeType.US;
                 USVol = "A8";
+                numUS = 11;
                 highPrecision = false;
                 req = Resources.LoadAsync("VolumeTextures/US/A8/vol01");
                 break;
             case 2:
                 volumeType = VolumeType.US;
                 USVol = "1I";
+                numUS = 13;
                 highPrecision = false;
                 req = Resources.LoadAsync("VolumeTextures/US/1I/vol01");
                 break;
@@ -827,20 +694,17 @@ public class VolumeBuilder : MonoBehaviour
                 req = Resources.LoadAsync("VolumeTextures/CT/thorax");
                 break;
             case 6:
-                volumeType = VolumeType.MRI;
+                volumeType = VolumeType.US;
                 highPrecision = false;
-                req = Resources.LoadAsync("VolumeTextures/MRI/knee");
+                USVol = "1Icomp";
+                numUS = 13;
+                req = Resources.LoadAsync("VolumeTextures/US/1Icomp/vol01");
                 break;
             case 7:
-                volumeType = VolumeType.MRI;
-                highPrecision = false;
-                req = Resources.LoadAsync("VolumeTextures/MRI/abdomen");
-                break;
-            case 8:
                 volumeType = VolumeType.CT;
                 scale = new Vector3(0.286f, 0.286f, 0.620f);
                 highPrecision = false;
-                req = Resources.LoadAsync("VolumeTextures/CT/thoraxtest");
+                req = Resources.LoadAsync("VolumeTextures/CT/thorax");
                 break;
             default:
                 volumeType = VolumeType.CT;

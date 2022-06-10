@@ -71,7 +71,14 @@ Shader "VolumeRendering/Optimized/ChebyshevHalf"
 					return min(min(v.x, v.y), v.z);
 				}
 
-				// From Lachlan Deakin's code (https://github.com/LDeakin/VkVolume/blob/master/shaders/volume_render.frag)
+				/*
+					* Author: Lachlan Deakin
+					* Date: Dec 9, 2021
+					* File: shaders/volume_render.frag
+					* Commit: 4b94c00
+					* Type: Source code
+					* Link: https://github.com/LDeakin/VkVolume/blob/master/shaders/volume_render.frag
+				*/
 				float3 ray_caster_get_back(float3 front_intersection, float3 dir) {
 					// Use AABB ray-box intersection (simplified due to unit cube [0-1]) to get intersection with back
 					float3 dir_inv = 1.0f / dir;
@@ -163,7 +170,7 @@ Shader "VolumeRendering/Optimized/ChebyshevHalf"
                     //int num_distance_samples = 0;
                     //
 
-                    [loop] [fastopt]
+                    [loop]
                     for (int i = 0; i < n; i) {
 						float3 u = volume_to_occupancy_u * currentRayPos;
 						int3 u_int = int3(floor(u));

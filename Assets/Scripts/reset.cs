@@ -10,21 +10,27 @@ public class Reset : MonoBehaviour
 
     public void Panic()
     {
-        render.GetComponent<VolumeRenderController>().outMap.Release();
-        Destroy(render);
-        if (render.GetComponent<VolumeRenderController>().volumeType == VolumeRendering.VolumeType.US)
+        VolumeRenderController controller = render.GetComponent<VolumeRenderController>();
+
+        if (controller.emptySpaceSkip && controller.volumeType == VolumeRendering.VolumeType.US)
+        {
+            controller.outMap.Release();
+        }
+        if (controller.volumeType == VolumeRendering.VolumeType.US)
         {
             Destroy(speedUI);
         }
-        if (render.GetComponent<VolumeRenderController>().emptySpaceSkip)
+        if (controller.emptySpaceSkip)
         {
             Destroy(qualityUI);
         }
-        if (render.GetComponent<VolumeRenderController>().shaded)
+        if (controller.shaded)
         {
             Destroy(ambientUI);
         }
-        
+
+        Destroy(render);
+
         GameObject menu = Instantiate(ui, new Vector3(0, -0.5f, 3f), Quaternion.identity);
         VolumeBuilder x = menu.transform.GetChild(menu.transform.childCount - 1).GetComponent(typeof(VolumeBuilder)) as VolumeBuilder;
         x.panic = Resources.Load<Reset>("Prefabs/Reset button");

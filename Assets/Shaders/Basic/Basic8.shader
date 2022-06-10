@@ -75,7 +75,14 @@ Shader "VolumeRendering/Basic/Basic8"
 					return min(min(v.x, v.y), v.z);
 				}
 
-				// From Lachlan Deakin's code (https://github.com/LDeakin/VkVolume/blob/master/shaders/volume_render.frag)
+				/*
+					* Author: Lachlan Deakin
+					* Date: Dec 9, 2021
+					* File: shaders/volume_render.frag
+					* Commit: 4b94c00
+					* Type: Source code
+					* Link: https://github.com/LDeakin/VkVolume/blob/master/shaders/volume_render.frag
+				*/
 				float3 ray_caster_get_back(float3 front_intersection, float3 dir) {
 					// Use AABB ray-box intersection (simplified due to unit cube [0-1]) to get intersection with back
 					float3 dir_inv = 1.0f / dir;
@@ -139,8 +146,9 @@ Shader "VolumeRendering/Basic/Basic8"
 
 					// This piece of code from Deakin makes performance smoother in some cases.
 					// Deakin's words:
-						// This test fixes a performance regression if view is oriented with edge/s of the volume
-						// perhaps due to precision issues with the bounding box intersection
+						// "This test fixes a performance regression if view is oriented with edge/s of the volume
+						// perhaps due to precision issues with the bounding box intersection"
+						// https://github.com/LDeakin/VkVolume/blob/master/shaders/volume_render.frag
 					float3 early_exit_test = ray.origin + step_volume;
 					if (any(early_exit_test <= 0) || any(early_exit_test >= 1)) {
 						return fixed4(0, 0, 0, 0);
@@ -155,7 +163,6 @@ Shader "VolumeRendering/Basic/Basic8"
 					[loop]
 					for (int iter = 0; iter < n; iter++)
 					{
-						// Sample the texture and set the value to 0 if it is outside the slice or not within the value thresholds
 						float src = tex3Dlod(_Volume, float4(currentRayPos, 0));;
 
 						// Get the alpha directly from the texture, set the color by blending
