@@ -2,6 +2,7 @@
 This project explores volume rendering optimizations on Microsoft's HoloLens 2.
 
 The most interesting scripts (Apart from the shaders) are volumebuilder.cs and volumerendercontroller.cs. These contain some necessary preprocessing for the optimizations. Most of the code for occupancy map and Chebyshev distance map is inspired by Deakin and Knackstedt's paper on Chebyshev distance maps: https://link.springer.com/article/10.1007/s41095-019-0155-y
+
 In addition, some is adapted for C# and HLSL from Deakin's open-source volume renderer: https://github.com/LDeakin/VkVolume
 
 Use NuGet for Unity to import MathNet.
