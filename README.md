@@ -1,5 +1,5 @@
 # Master-Project
-This project explores volume rendering optimizations on Microsoft's HoloLens 2.
+This project explores volume rendering optimizations on Microsoft's HoloLens 2, and is the application that was made as part of my master thesis.
 
 The most interesting scripts (Apart from the shaders) are volumebuilder.cs and volumerendercontroller.cs. These contain some necessary preprocessing for the optimizations. Most of the code for occupancy map and Chebyshev distance map is inspired by Deakin and Knackstedt's paper on Chebyshev distance maps: https://link.springer.com/article/10.1007/s41095-019-0155-y
 
